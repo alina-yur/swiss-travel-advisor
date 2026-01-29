@@ -14,6 +14,13 @@ import java.util.List;
 @Singleton
 public class HotelRepository {
     private static final Logger LOG = LoggerFactory.getLogger(HotelRepository.class);
+    private static final String SELECT_HOTEL = """
+        SELECT h.id, h.destination_id, d.name as destination_name,
+               h.name, h.price_per_night, h.description
+        FROM hotels h
+        JOIN destinations d ON h.destination_id = d.id
+        """;
+
     private final DataSource dataSource;
 
     public HotelRepository(DataSource dataSource) {
@@ -21,57 +28,30 @@ public class HotelRepository {
     }
 
     public List<Hotel> searchByVector(float[] queryVector, Long destinationId, Double maxPrice, int limit) {
-        StringBuilder sql = new StringBuilder("""
-            SELECT h.id, h.destination_id, d.name as destination_name,
-                   h.name, h.price_per_night, h.description
-            FROM hotels h
-            JOIN destinations d ON h.destination_id = d.id
+        String sql = SELECT_HOTEL + """
             WHERE h.description_embedding IS NOT NULL
-            """);
-
-        List<Object> params = new ArrayList<>();
-
-        if (destinationId != null) {
-            sql.append(" AND h.destination_id = ?");
-            params.add(destinationId);
-        }
-
-        if (maxPrice != null) {
-            sql.append(" AND h.price_per_night <= ?");
-            params.add(maxPrice);
-        }
-
-        sql.append(" ORDER BY VECTOR_DISTANCE(h.description_embedding, ?, COSINE) FETCH FIRST ? ROWS ONLY");
-        params.add(queryVector);
-        params.add(limit);
+            """ + (destinationId != null ? " AND h.destination_id = ?" : "")
+            + (maxPrice != null ? " AND h.price_per_night <= ?" : "") + """
+             ORDER BY VECTOR_DISTANCE(h.description_embedding, ?, COSINE) FETCH FIRST ? ROWS ONLY
+            """;
 
         List<Hotel> results = new ArrayList<>();
         try (Connection conn = dataSource.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql.toString())) {
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
 
             int paramIndex = 1;
-            for (Object param : params) {
-                if (param instanceof Long) {
-                    stmt.setLong(paramIndex++, (Long) param);
-                } else if (param instanceof Double) {
-                    stmt.setDouble(paramIndex++, (Double) param);
-                } else if (param instanceof float[]) {
-                    stmt.setObject(paramIndex++, param, OracleType.VECTOR);
-                } else if (param instanceof Integer) {
-                    stmt.setInt(paramIndex++, (Integer) param);
-                }
+            if (destinationId != null) {
+                stmt.setLong(paramIndex++, destinationId);
             }
+            if (maxPrice != null) {
+                stmt.setDouble(paramIndex++, maxPrice);
+            }
+            stmt.setObject(paramIndex++, queryVector, OracleType.VECTOR);
+            stmt.setInt(paramIndex, limit);
 
             try (ResultSet rs = stmt.executeQuery()) {
                 while (rs.next()) {
-                    results.add(new Hotel(
-                        rs.getLong("id"),
-                        rs.getLong("destination_id"),
-                        rs.getString("destination_name"),
-                        rs.getString("name"),
-                        rs.getDouble("price_per_night"),
-                        rs.getString("description")
-                    ));
+                    results.add(mapHotel(rs));
                 }
             }
         } catch (SQLException e) {
@@ -81,12 +61,23 @@ public class HotelRepository {
     }
 
     public List<Hotel> findAll() {
-        String sql = """
-            SELECT h.id, h.destination_id, d.name as destination_name,
-                   h.name, h.price_per_night, h.description
-            FROM hotels h
-            JOIN destinations d ON h.destination_id = d.id
-            """;
+        List<Hotel> results = new ArrayList<>();
+
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(SELECT_HOTEL);
+             ResultSet rs = stmt.executeQuery()) {
+
+            while (rs.next()) {
+                results.add(mapHotel(rs));
+            }
+        } catch (SQLException e) {
+            LOG.error("Error finding all hotels", e);
+        }
+        return results;
+    }
+
+    public List<Hotel> findWithoutEmbedding() {
+        String sql = SELECT_HOTEL + " WHERE h.description_embedding IS NULL";
         List<Hotel> results = new ArrayList<>();
 
         try (Connection conn = dataSource.getConnection();
@@ -94,17 +85,10 @@ public class HotelRepository {
              ResultSet rs = stmt.executeQuery()) {
 
             while (rs.next()) {
-                results.add(new Hotel(
-                    rs.getLong("id"),
-                    rs.getLong("destination_id"),
-                    rs.getString("destination_name"),
-                    rs.getString("name"),
-                    rs.getDouble("price_per_night"),
-                    rs.getString("description")
-                ));
+                results.add(mapHotel(rs));
             }
         } catch (SQLException e) {
-            LOG.error("Error finding all hotels", e);
+            LOG.error("Error finding hotels without embedding", e);
         }
         return results;
     }
@@ -125,13 +109,7 @@ public class HotelRepository {
     }
 
     public Hotel findById(Long id) {
-        String sql = """
-            SELECT h.id, h.destination_id, d.name as destination_name,
-                   h.name, h.price_per_night, h.description
-            FROM hotels h
-            JOIN destinations d ON h.destination_id = d.id
-            WHERE h.id = ?
-            """;
+        String sql = SELECT_HOTEL + " WHERE h.id = ?";
 
         try (Connection conn = dataSource.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
@@ -140,19 +118,23 @@ public class HotelRepository {
 
             try (ResultSet rs = stmt.executeQuery()) {
                 if (rs.next()) {
-                    return new Hotel(
-                        rs.getLong("id"),
-                        rs.getLong("destination_id"),
-                        rs.getString("destination_name"),
-                        rs.getString("name"),
-                        rs.getDouble("price_per_night"),
-                        rs.getString("description")
-                    );
+                    return mapHotel(rs);
                 }
             }
         } catch (SQLException e) {
             LOG.error("Error finding hotel by id={}", id, e);
         }
         return null;
+    }
+
+    private Hotel mapHotel(ResultSet rs) throws SQLException {
+        return new Hotel(
+            rs.getLong("id"),
+            rs.getLong("destination_id"),
+            rs.getString("destination_name"),
+            rs.getString("name"),
+            rs.getDouble("price_per_night"),
+            rs.getString("description")
+        );
     }
 }

@@ -1,7 +1,7 @@
 package com.example.controller;
 
 import com.example.model.WishlistItem;
-import com.example.service.WishlistService;
+import com.example.repository.WishlistRepository;
 import io.micronaut.http.annotation.Controller;
 import io.micronaut.http.annotation.Get;
 
@@ -9,14 +9,14 @@ import java.util.List;
 
 @Controller("/api")
 public class WishlistController {
-    private final WishlistService wishlistService;
+    private final WishlistRepository wishlistRepository;
 
-    public WishlistController(WishlistService wishlistService) {
-        this.wishlistService = wishlistService;
+    public WishlistController(WishlistRepository wishlistRepository) {
+        this.wishlistRepository = wishlistRepository;
     }
 
     @Get("/wishlist")
     public List<WishlistItem> getWishlist() {
-        return wishlistService.getWishlist();
+        return wishlistRepository.findAll();
     }
 }

@@ -7,137 +7,128 @@ import com.example.model.WishlistItem;
 import com.example.repository.ActivityRepository;
 import com.example.repository.DestinationRepository;
 import com.example.repository.HotelRepository;
+import com.example.repository.WishlistRepository;
 import com.example.service.EmbeddingService;
-import com.example.service.WishlistService;
 import dev.langchain4j.agent.tool.Tool;
 import jakarta.inject.Singleton;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.List;
 
 @Singleton
 public class TravelTools {
-    private static final Logger LOG = LoggerFactory.getLogger(TravelTools.class);
 
     private final EmbeddingService embeddingService;
     private final DestinationRepository destinationRepository;
     private final HotelRepository hotelRepository;
     private final ActivityRepository activityRepository;
-    private final WishlistService wishlistService;
+    private final WishlistRepository wishlistRepository;
 
     public TravelTools(
         EmbeddingService embeddingService,
         DestinationRepository destinationRepository,
         HotelRepository hotelRepository,
         ActivityRepository activityRepository,
-        WishlistService wishlistService
+        WishlistRepository wishlistRepository
     ) {
         this.embeddingService = embeddingService;
         this.destinationRepository = destinationRepository;
         this.hotelRepository = hotelRepository;
         this.activityRepository = activityRepository;
-        this.wishlistService = wishlistService;
+        this.wishlistRepository = wishlistRepository;
     }
 
-    @Tool("""
-        Search for Swiss destinations matching the user's query.
-        Use semantic search to find destinations based on user preferences like 'mountain views', 'lakeside', 'winter sports', etc.
-        Returns a list of destinations with their names, regions, and descriptions.
-        """)
-    public List<Destination> searchDestinations(String query) {
-        LOG.info("Searching destinations with query: {}", query);
+    @Tool("Search for Swiss destinations by preference (e.g., 'mountain views', 'lakeside', 'winter sports').")
+    public String searchDestinations(String query) {
         float[] queryVector = embeddingService.generateEmbedding(query);
-        return destinationRepository.searchByVector(queryVector, 5);
+        List<Destination> results = destinationRepository.searchByVector(queryVector, 5);
+        if (results.isEmpty()) {
+            return "No destinations found matching: " + query;
+        }
+        StringBuilder sb = new StringBuilder("Found destinations:\n");
+        for (Destination d : results) {
+            sb.append(String.format("- %s (ID:%d, %s): %s\n", d.name(), d.id(), d.region(), d.description()));
+        }
+        return sb.toString();
     }
 
-    @Tool("""
-        Search for hotels matching the user's query.
-        Optional parameters:
-        - destinationId: Filter hotels by specific destination (use ID from searchDestinations)
-        - maxPrice: Maximum price per night in CHF
-        Use semantic search for queries like 'luxury hotel', 'budget friendly', 'spa hotel', etc.
-        Returns a list of hotels with names, prices per night, and descriptions.
-        """)
-    public List<Hotel> searchHotels(String query, Long destinationId, Double maxPrice) {
-        LOG.info("Searching hotels with query: {}, destinationId: {}, maxPrice: {}", query, destinationId, maxPrice);
+    @Tool("Search for hotels. Optional filters: destinationId, maxPrice (CHF/night).")
+    public String searchHotels(String query, Long destinationId, Double maxPrice) {
         float[] queryVector = embeddingService.generateEmbedding(query);
-        return hotelRepository.searchByVector(queryVector, destinationId, maxPrice, 5);
+        List<Hotel> results = hotelRepository.searchByVector(queryVector, destinationId, maxPrice, 5);
+        if (results.isEmpty()) {
+            return "No hotels found matching: " + query;
+        }
+        StringBuilder sb = new StringBuilder("Found hotels:\n");
+        for (Hotel h : results) {
+            sb.append(String.format("- %s (ID:%d, CHF %.0f/night): %s\n", h.name(), h.id(), h.pricePerNight(), h.description()));
+        }
+        return sb.toString();
     }
 
-    @Tool("""
-        Search for activities matching the user's query.
-        Optional parameter:
-        - destinationId: Filter activities by specific destination (use ID from searchDestinations)
-        Use semantic search for queries like 'outdoor adventure', 'scenic train', 'wine tasting', etc.
-        Returns a list of activities with names, seasons, and descriptions.
-        """)
-    public List<Activity> searchActivities(String query, Long destinationId) {
-        LOG.info("Searching activities with query: {}, destinationId: {}", query, destinationId);
+    @Tool("Search for activities. Optional filter: destinationId.")
+    public String searchActivities(String query, Long destinationId) {
         float[] queryVector = embeddingService.generateEmbedding(query);
-        return activityRepository.searchByVector(queryVector, destinationId, 5);
+        List<Activity> results = activityRepository.searchByVector(queryVector, destinationId, 5);
+        if (results.isEmpty()) {
+            return "No activities found matching: " + query;
+        }
+        StringBuilder sb = new StringBuilder("Found activities:\n");
+        for (Activity a : results) {
+            sb.append(String.format("- %s (ID:%d, %s): %s\n", a.name(), a.id(), a.season(), a.description()));
+        }
+        return sb.toString();
     }
 
-    @Tool("""
-        Add an item to the user's wishlist.
-        Parameters:
-        - itemType: Must be one of 'destination', 'hotel', or 'activity'
-        - itemId: The ID of the item to add (from search results)
-        Use this when the user expresses interest in a destination, hotel, or activity.
-        Returns a confirmation message.
-        """)
+    @Tool("Add an item to the wishlist. itemType: 'destination', 'hotel', or 'activity'. itemId: from search results.")
     public String addToWishlist(String itemType, Long itemId) {
-        LOG.info("Adding to wishlist: itemType={}, itemId={}", itemType, itemId);
-
-        String name = "";
-        String description = "";
-
-        switch (itemType.toLowerCase()) {
+        String type = itemType.toLowerCase();
+        String name = switch (type) {
             case "destination" -> {
-                List<Destination> destinations = destinationRepository.findAll();
-                Destination dest = destinations.stream()
-                    .filter(d -> d.id().equals(itemId))
-                    .findFirst()
-                    .orElse(null);
-                if (dest == null) {
-                    return "Error: Destination not found with ID " + itemId;
-                }
-                name = dest.name() + " (" + dest.region() + ")";
-                description = dest.description();
+                Destination d = destinationRepository.findById(itemId);
+                yield d != null ? d.name() : null;
             }
             case "hotel" -> {
-                Hotel hotel = hotelRepository.findById(itemId);
-                if (hotel == null) {
-                    return "Error: Hotel not found with ID " + itemId;
-                }
-                name = hotel.name() + " - CHF " + hotel.pricePerNight() + "/night";
-                description = hotel.description();
+                Hotel h = hotelRepository.findById(itemId);
+                yield h != null ? h.name() : null;
             }
             case "activity" -> {
-                Activity activity = activityRepository.findById(itemId);
-                if (activity == null) {
-                    return "Error: Activity not found with ID " + itemId;
-                }
-                name = activity.name() + " (" + activity.season() + ")";
-                description = activity.description();
+                Activity a = activityRepository.findById(itemId);
+                yield a != null ? a.name() : null;
             }
-            default -> {
-                return "Error: Invalid item type. Must be 'destination', 'hotel', or 'activity'";
-            }
+            default -> null;
+        };
+        if (name == null) {
+            return "Error: " + itemType + " with ID " + itemId + " not found.";
         }
-
-        WishlistItem item = new WishlistItem(itemType, itemId, name, description);
-        wishlistService.addItem(item);
+        wishlistRepository.save(new WishlistItem(type, itemId));
         return "Added to wishlist: " + name;
     }
 
-    @Tool("""
-        Get the user's current wishlist.
-        Returns all destinations, hotels, and activities the user has added to their wishlist.
-        Use this when the user asks to see their saved items or wishlist.
-        """)
-    public List<WishlistItem> getWishlist() {
-        LOG.info("Retrieving wishlist");
-        return wishlistService.getWishlist();
+    @Tool("Get the user's wishlist with all saved destinations, hotels, and activities.")
+    public String getWishlist() {
+        List<WishlistItem> items = wishlistRepository.findAll();
+        if (items.isEmpty()) {
+            return "Your wishlist is empty.";
+        }
+        StringBuilder sb = new StringBuilder("Your wishlist:\n");
+        for (WishlistItem item : items) {
+            String detail = switch (item.itemType()) {
+                case "destination" -> {
+                    Destination d = destinationRepository.findById(item.itemId());
+                    yield d != null ? d.name() + " (" + d.region() + ")" : "Unknown destination";
+                }
+                case "hotel" -> {
+                    Hotel h = hotelRepository.findById(item.itemId());
+                    yield h != null ? h.name() + " - CHF " + h.pricePerNight() + "/night" : "Unknown hotel";
+                }
+                case "activity" -> {
+                    Activity a = activityRepository.findById(item.itemId());
+                    yield a != null ? a.name() + " (" + a.season() + ")" : "Unknown activity";
+                }
+                default -> "Unknown item";
+            };
+            sb.append("- ").append(detail).append("\n");
+        }
+        return sb.toString();
     }
 }

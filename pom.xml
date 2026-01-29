@@ -10,26 +10,19 @@
   <parent>
     <groupId>io.micronaut.platform</groupId>
     <artifactId>micronaut-parent</artifactId>
-    <version>4.10.2</version>
+    <version>4.10.7</version>
   </parent>
   <properties>
     <packaging>jar</packaging>
     <jdk.version>25</jdk.version>
     <release.version>25</release.version>
-    <micronaut.version>4.10.2</micronaut.version>
+    <micronaut.version>4.10.7</micronaut.version>
     <micronaut.aot.enabled>false</micronaut.aot.enabled>
     <micronaut.aot.packageName>com.example.aot.generated</micronaut.aot.packageName>
     <micronaut.runtime>netty</micronaut.runtime>
     <exec.mainClass>com.example.Application</exec.mainClass>
     <flyway.version>11.1.0</flyway.version>
   </properties>
-
-  <repositories>
-    <repository>
-      <id>central</id>
-      <url>https://repo.maven.apache.org/maven2</url>
-    </repository>
-  </repositories>
 
   <dependencies>
     <dependency>
@@ -51,25 +44,6 @@
       <groupId>io.micronaut</groupId>
       <artifactId>micronaut-http-client</artifactId>
       <scope>compile</scope>
-    </dependency>
-    <dependency>
-      <groupId>io.micronaut.test</groupId>
-      <artifactId>micronaut-test-junit5</artifactId>
-      <scope>test</scope>
-    </dependency>
-    <dependency>
-      <groupId>org.junit.jupiter</groupId>
-      <artifactId>junit-jupiter-api</artifactId>
-      <scope>test</scope>
-    </dependency>
-    <dependency>
-      <groupId>org.junit.jupiter</groupId>
-      <artifactId>junit-jupiter-engine</artifactId>
-      <scope>test</scope>
-    </dependency>
-    <dependency>
-      <groupId>io.micronaut.langchain4j</groupId>
-      <artifactId>micronaut-langchain4j-core</artifactId>
     </dependency>
     <dependency>
       <groupId>io.micronaut.langchain4j</groupId>
@@ -121,6 +95,11 @@
           <annotationProcessorPaths combine.children="append">
             <path>
               <groupId>io.micronaut</groupId>
+              <artifactId>micronaut-inject-java</artifactId>
+              <version>${micronaut.core.version}</version>
+            </path>
+            <path>
+              <groupId>io.micronaut</groupId>
               <artifactId>micronaut-http-validation</artifactId>
               <version>${micronaut.core.version}</version>
             </path>
@@ -138,6 +117,7 @@
             <path>
               <groupId>io.micronaut.langchain4j</groupId>
               <artifactId>micronaut-langchain4j-processor</artifactId>
+              <version>${micronaut.langchain4j.version}</version>
             </path>
           </annotationProcessorPaths>
           <compilerArgs>
@@ -146,6 +126,18 @@
           </compilerArgs>
         </configuration>
       </plugin>
+
+      <plugin>
+        <groupId>org.graalvm.buildtools</groupId>
+        <artifactId>native-maven-plugin</artifactId>
+        <configuration>
+          <buildArgs>
+            <buildArg>-Ob</buildArg>
+            <buildArg>-H:+SharedArenaSupport</buildArg>
+          </buildArgs>
+        </configuration>
+      </plugin>
+
     </plugins>
   </build>
 

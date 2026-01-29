@@ -22,11 +22,10 @@ public class DataInitializer implements ApplicationEventListener<ServerStartupEv
     private final ActivityRepository activityRepository;
 
     public DataInitializer(
-        EmbeddingService embeddingService,
-        DestinationRepository destinationRepository,
-        HotelRepository hotelRepository,
-        ActivityRepository activityRepository
-    ) {
+            EmbeddingService embeddingService,
+            DestinationRepository destinationRepository,
+            HotelRepository hotelRepository,
+            ActivityRepository activityRepository) {
         this.embeddingService = embeddingService;
         this.destinationRepository = destinationRepository;
         this.hotelRepository = hotelRepository;
@@ -35,36 +34,40 @@ public class DataInitializer implements ApplicationEventListener<ServerStartupEv
 
     @Override
     public void onApplicationEvent(ServerStartupEvent event) {
-        LOG.info("Checking and generating embeddings if needed...");
+        LOG.info("Checking for missing embeddings...");
 
         try {
             int destinationCount = 0;
             int hotelCount = 0;
             int activityCount = 0;
 
-            for (Destination destination : destinationRepository.findAll()) {
+            for (Destination destination : destinationRepository.findWithoutEmbedding()) {
                 String text = destination.name() + " " + destination.region() + ". " + destination.description();
                 float[] embedding = embeddingService.generateEmbedding(text);
                 destinationRepository.updateEmbedding(destination.id(), embedding);
                 destinationCount++;
             }
 
-            for (Hotel hotel : hotelRepository.findAll()) {
+            for (Hotel hotel : hotelRepository.findWithoutEmbedding()) {
                 String text = hotel.name() + " in " + hotel.destinationName() + ". " + hotel.description();
                 float[] embedding = embeddingService.generateEmbedding(text);
                 hotelRepository.updateEmbedding(hotel.id(), embedding);
                 hotelCount++;
             }
 
-            for (Activity activity : activityRepository.findAll()) {
+            for (Activity activity : activityRepository.findWithoutEmbedding()) {
                 String text = activity.name() + " in " + activity.destinationName() + ". " + activity.description();
                 float[] embedding = embeddingService.generateEmbedding(text);
                 activityRepository.updateEmbedding(activity.id(), embedding);
                 activityCount++;
             }
 
-            LOG.info("Embeddings generated: {} destinations, {} hotels, {} activities",
-                destinationCount, hotelCount, activityCount);
+            if (destinationCount + hotelCount + activityCount > 0) {
+                LOG.info("Generated embeddings: {} destinations, {} hotels, {} activities",
+                        destinationCount, hotelCount, activityCount);
+            } else {
+                LOG.info("All embeddings up to date");
+            }
         } catch (Exception e) {
             LOG.error("Error generating embeddings", e);
         }

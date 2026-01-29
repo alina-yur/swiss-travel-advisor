@@ -14,6 +14,13 @@ import java.util.List;
 @Singleton
 public class ActivityRepository {
     private static final Logger LOG = LoggerFactory.getLogger(ActivityRepository.class);
+    private static final String SELECT_ACTIVITY = """
+        SELECT a.id, a.destination_id, d.name as destination_name,
+               a.name, a.season, a.description
+        FROM activities a
+        JOIN destinations d ON a.destination_id = d.id
+        """;
+
     private final DataSource dataSource;
 
     public ActivityRepository(DataSource dataSource) {
@@ -21,50 +28,26 @@ public class ActivityRepository {
     }
 
     public List<Activity> searchByVector(float[] queryVector, Long destinationId, int limit) {
-        StringBuilder sql = new StringBuilder("""
-            SELECT a.id, a.destination_id, d.name as destination_name,
-                   a.name, a.season, a.description
-            FROM activities a
-            JOIN destinations d ON a.destination_id = d.id
+        String sql = SELECT_ACTIVITY + """
             WHERE a.description_embedding IS NOT NULL
-            """);
-
-        List<Object> params = new ArrayList<>();
-
-        if (destinationId != null) {
-            sql.append(" AND a.destination_id = ?");
-            params.add(destinationId);
-        }
-
-        sql.append(" ORDER BY VECTOR_DISTANCE(a.description_embedding, ?, COSINE) FETCH FIRST ? ROWS ONLY");
-        params.add(queryVector);
-        params.add(limit);
+            """ + (destinationId != null ? " AND a.destination_id = ?" : "") + """
+             ORDER BY VECTOR_DISTANCE(a.description_embedding, ?, COSINE) FETCH FIRST ? ROWS ONLY
+            """;
 
         List<Activity> results = new ArrayList<>();
         try (Connection conn = dataSource.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql.toString())) {
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
 
             int paramIndex = 1;
-            for (Object param : params) {
-                if (param instanceof Long) {
-                    stmt.setLong(paramIndex++, (Long) param);
-                } else if (param instanceof float[]) {
-                    stmt.setObject(paramIndex++, param, OracleType.VECTOR);
-                } else if (param instanceof Integer) {
-                    stmt.setInt(paramIndex++, (Integer) param);
-                }
+            if (destinationId != null) {
+                stmt.setLong(paramIndex++, destinationId);
             }
+            stmt.setObject(paramIndex++, queryVector, OracleType.VECTOR);
+            stmt.setInt(paramIndex, limit);
 
             try (ResultSet rs = stmt.executeQuery()) {
                 while (rs.next()) {
-                    results.add(new Activity(
-                        rs.getLong("id"),
-                        rs.getLong("destination_id"),
-                        rs.getString("destination_name"),
-                        rs.getString("name"),
-                        rs.getString("season"),
-                        rs.getString("description")
-                    ));
+                    results.add(mapActivity(rs));
                 }
             }
         } catch (SQLException e) {
@@ -74,12 +57,23 @@ public class ActivityRepository {
     }
 
     public List<Activity> findAll() {
-        String sql = """
-            SELECT a.id, a.destination_id, d.name as destination_name,
-                   a.name, a.season, a.description
-            FROM activities a
-            JOIN destinations d ON a.destination_id = d.id
-            """;
+        List<Activity> results = new ArrayList<>();
+
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(SELECT_ACTIVITY);
+             ResultSet rs = stmt.executeQuery()) {
+
+            while (rs.next()) {
+                results.add(mapActivity(rs));
+            }
+        } catch (SQLException e) {
+            LOG.error("Error finding all activities", e);
+        }
+        return results;
+    }
+
+    public List<Activity> findWithoutEmbedding() {
+        String sql = SELECT_ACTIVITY + " WHERE a.description_embedding IS NULL";
         List<Activity> results = new ArrayList<>();
 
         try (Connection conn = dataSource.getConnection();
@@ -87,17 +81,10 @@ public class ActivityRepository {
              ResultSet rs = stmt.executeQuery()) {
 
             while (rs.next()) {
-                results.add(new Activity(
-                    rs.getLong("id"),
-                    rs.getLong("destination_id"),
-                    rs.getString("destination_name"),
-                    rs.getString("name"),
-                    rs.getString("season"),
-                    rs.getString("description")
-                ));
+                results.add(mapActivity(rs));
             }
         } catch (SQLException e) {
-            LOG.error("Error finding all activities", e);
+            LOG.error("Error finding activities without embedding", e);
         }
         return results;
     }
@@ -118,13 +105,7 @@ public class ActivityRepository {
     }
 
     public Activity findById(Long id) {
-        String sql = """
-            SELECT a.id, a.destination_id, d.name as destination_name,
-                   a.name, a.season, a.description
-            FROM activities a
-            JOIN destinations d ON a.destination_id = d.id
-            WHERE a.id = ?
-            """;
+        String sql = SELECT_ACTIVITY + " WHERE a.id = ?";
 
         try (Connection conn = dataSource.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
@@ -133,19 +114,23 @@ public class ActivityRepository {
 
             try (ResultSet rs = stmt.executeQuery()) {
                 if (rs.next()) {
-                    return new Activity(
-                        rs.getLong("id"),
-                        rs.getLong("destination_id"),
-                        rs.getString("destination_name"),
-                        rs.getString("name"),
-                        rs.getString("season"),
-                        rs.getString("description")
-                    );
+                    return mapActivity(rs);
                 }
             }
         } catch (SQLException e) {
             LOG.error("Error finding activity by id={}", id, e);
         }
         return null;
+    }
+
+    private Activity mapActivity(ResultSet rs) throws SQLException {
+        return new Activity(
+            rs.getLong("id"),
+            rs.getLong("destination_id"),
+            rs.getString("destination_name"),
+            rs.getString("name"),
+            rs.getString("season"),
+            rs.getString("description")
+        );
     }
 }

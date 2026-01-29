@@ -1,0 +1,57 @@
+{
+  "reflection": [
+    {
+      "type": {
+        "proxy": [
+          "com.example.service.SwissTravelAssistant"
+        ]
+      }
+    },
+    {
+      "type": "com.example.tools.TravelTools",
+      "allDeclaredConstructors": true,
+      "allDeclaredMethods": true,
+      "allDeclaredFields": true
+    },
+    {
+      "type": { "pattern": "com.example.model.*" },
+      "allDeclaredConstructors": true,
+      "allDeclaredMethods": true,
+      "allDeclaredFields": true
+    },
+    {
+      "type": "dev.langchain4j.model.openai.internal.embedding.OpenAiEmbeddingDeserializer",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true
+    },
+    {
+      "type": "dev.langchain4j.model.openai.internal.chat.OpenAiChatCompletionDeserializer",
+      "allDeclaredConstructors": true,
+      "allDeclaredMethods": true
+    },
+    {
+      "type": "dev.langchain4j.model.openai.internal.api.OpenAiEmbeddingResponse",
+      "allDeclaredConstructors": true,
+      "allDeclaredMethods": true,
+      "allDeclaredFields": true
+    },
+    {
+      "type": "dev.langchain4j.model.openai.internal.api.OpenAiEmbedding",
+      "allDeclaredConstructors": true,
+      "allDeclaredMethods": true,
+      "allDeclaredFields": true
+    },
+    {
+      "type": "dev.langchain4j.model.openai.internal.api.OpenAiUsage",
+      "allDeclaredConstructors": true,
+      "allDeclaredMethods": true,
+      "allDeclaredFields": true
+    },
+    {
+      "type": "dev.langchain4j.model.openai.internal.api.OpenAiError",
+      "allDeclaredConstructors": true,
+      "allDeclaredFields": true
+    }
+  ]
+}

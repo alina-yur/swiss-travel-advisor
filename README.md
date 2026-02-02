@@ -54,9 +54,8 @@ curl -X POST http://localhost:8080/api/chat \
 |-----------|---------|
 | Micronaut 4.10.2 | JVM framework with compile-time DI |
 | LangChain4j | LLM integration and tool orchestration |
-| Oracle 23ai | Database with native vector search |
+| Oracle AI Database | Database with native vector search |
 | OpenAI | GPT-4o for chat, text-embedding-3-small for embeddings |
-| Flyway | Database migrations |
 | GraalVM | Native image compilation |
 
 ## Architecture
@@ -87,9 +86,3 @@ activities (id, destination_id, name, season, description, description_embedding
 ```
 
 Expected startup time: ~50-100ms
-
-## Configuration
-
-See [application.properties](src/main/resources/application.properties) for database connection, OpenAI settings, and Flyway configuration.
-
-**Note:** Ensure [pom.xml](pom.xml) includes `flyway-database-oracle` dependency for Oracle 23ai support.

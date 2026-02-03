@@ -2,32 +2,43 @@
 
 Nowadays AI provides many great features, from quick answers to smarter search and digital assistants. 
 
-In this post, we’ll put together a **Swiss travel assistant** that understands **user intent**, not keywords. When a user asks something like:
+In this post, we’ll build a **Swiss travel assistant** that understands **user intent**, rather than keywords. When a user asks something like:
 
 > “Provide recommendations for a peaceful mountain resort”
 
-... we’ll embed that query, run **vector similarity search** in the database, and return destinations that *mean* the right thing — even if they don’t contain the exact words.
+... the application will embed that query, run **vector similarity search** in the database, and return destinations that mean*the right thing — even if they don’t contain the exact words.
 
 We’ll use:
 
 - **Micronaut 4** — lightweight JVM framework with compile-time dependency injection
-- **LangChain4j** — LLM orchestration and tool calling
+- **LangChain4j** — a library for LLM orchestration and tool calling
 - **Oracle AI Database** — native vector storage and similarity search
-- **OpenAI** — chat and embeddings (GPT-4o, `text-embedding-3-small`)
+- **OpenAI** — LLM of choice covering chat and embeddings
 
 ---
+## Project setup
+
+Here’s what we will build:
+
+- A Micronaut app that exposes a `/api/chat` endpoint  
+- On startup, it loads a dataset with travel destinations, hotels, activities
+- Each entry gets a **vector embedding** generated from its description
+- Vectors are stored in **Oracle AI Database** right next to the application data
+- At query time, we embed the user question the same way, and run **similarity search**
+- The LLM acts as an orchestrator: it decides which **tools** to call and how to present the results to the user.
+
 
 ## Semantic search via embeddings
 
 A **vector embedding** is a numeric representation of text. Similar meanings end up “close” to each other in vector space.
 
-That’s what enables intent-based search like:
+<!-- That’s what enables intent-based search like:
 
-- “Cozy ski town with views” → matches destinations described as calm, small, scenic
-- “Peaceful mountain resort” → matches entries that mention wellness, peace, quiet villages  
-- “Best ski resorts” → matches well-known Swiss ski areas.
+- “Cozy ski town with views” matches destinations described as calm, small, scenic
+- “Peaceful mountain resort” matches entries that mention wellness, peace, quiet villages  
+- “Best ski resorts” matches well-known Swiss ski areas. -->
 
-Instead of keyword matching, we compare vector distances and return the closest results.
+Instead of keyword matching, we compare vector distances and return the closest results. This enables more adavanced and rich search user experience.
 
 ---
 
@@ -37,7 +48,7 @@ First, let's briefly look at Micronaut in case you are new to it.
 
 Micronaut is a JVM framework for building modern lightweight applications. It was introduced as long ago as October 2018 — you can still find Graeme Rocher's [talk](https://www.youtube.com/watch?v=BL9SsY5orkA) presenting it.
 
-The key idea behind Micronaut is shifting dependency injection and annotation processing to compile time instead of runtime. Wondering why? Traditionally, frameworks used to heavily rely on reflection to scan application classes and wire up dependencies upon application start. Such approach often ended up being time- and memory consuming. Micronaut moves all of that to build time - your app starts with everything already wired up. If you are familiar with the key idea behind GraalVM Native Image, you will find this quite similar: shift work to the build time, so you can start instantaneously when it actually matters: at run time.
+The key idea behind Micronaut is shifting dependency injection and annotation processing to compile time instead of runtime. Why? Traditionally, many frameworks heavily relied on reflection to scan application classes and resolve dependencies upon application start. Such approach often ended up being time- and memory consuming. Micronaut moves all of that work to build time - your app starts with everything already wired up. If you are familiar with the key idea behind GraalVM Native Image, you will find this quite similar: shift work to the build time, so you can start instantaneously when it actually matters: at run time.
 
 The performance outcomes of shifting to build time:
 - Sub-second startup times on the JVM
@@ -45,7 +56,7 @@ The performance outcomes of shifting to build time:
 - Less reflection make native compilation fast and easy out of the box
 - On top of that, reduced reflection means better performance and smaller binaries.
 
-When it comes to the best use cases for Micronaut, microservices, serverless functions, CLI applications, and message-driven services are all great fits, but really, any Java application can benefit from faster startup and lower memory usage.
+When it comes to the most common use cases for Micronaut, microservices, serverless functions, CLI applications, and message-driven services are all great fits, but really, any Java application can benefit from faster startup and lower memory usage.
 
 So the idea behind Micronaut is to provide a **great developer experience and performance at no runtime cost**.
 

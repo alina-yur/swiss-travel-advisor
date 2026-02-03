@@ -101,7 +101,7 @@ It gives you:
 
 -   Framework integrations (Micronaut/Spring/Quarkus)
 
-### AI Services: the clean, declarative approach
+### AI Services: simple declarative approach
 
 Instead of manually constructing prompts and calling the model, you define an interface:
 

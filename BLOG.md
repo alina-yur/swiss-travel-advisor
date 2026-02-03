@@ -60,7 +60,7 @@ When it comes to the most common use cases for Micronaut, microservices, serverl
 
 So the idea behind Micronaut is to provide a **great developer experience and performance at no runtime cost**.
 
-## Core Concepts
+### Core Concepts
 
 Let's look at some of the key concepts of Micronaut.
 
@@ -115,13 +115,24 @@ Interestingly, Micronaut is also no stranger to polyglot programming. It support
 
 Micronaut also offers first-class support for Graal Languages, such as GraalPy (`io.micronaut.graal-languages:micronaut-graalpy`), but that's a story for another time.
 
-## LangChain4j
+## LangChain4j: Bringing LLMs to Java
 
 Now let's look at LangChain4j, that will take care of AI orchestration in our project.
 
-LangChain4j is an open-source library that simplifies integrating LLMs into Java applications. The project was started back in early 2023 by Dmytro Liubarskyi, who discovered that at the time there was no convenient way to build LLM-powered chatbots in Java. 
+LangChain4j is an open-source library that simplifies integrating LLMs into Java applications.
 
-The framework provides unified APIs for working with proprietary APIs from 20+ LLM providers, such as OpenAI, Anthropic, Mistral, and others, and 30+ vector stores, such as Oracle, behind common interfaces. This means you can switch providers without rewriting application logic.
+It provides:
+
+-   Chat models (OpenAI, Anthropic, Mistral, etc.)
+
+-   Tool calling (function calling) with structured arguments
+
+-   Chat memory
+
+-   RAG building blocks (embedding models + vector stores)
+
+-   Framework integrations (Micronaut/Spring/Quarkus)
+
 
 ### Core Concepts
 
@@ -131,9 +142,9 @@ Let's look at the key building blocks of LangChain4j.
 
 `ChatModel` is the low-level API for interacting with LLMs, that you are likely familiar with. It accepts `ChatMessage` objects and returns a `ChatResponse`. You are probably also familiar with `UserMessage`,  representing user input (optionally multimodal), `SystemMessage`, which is developer-defined instructions describing the model's role and behavior, and `AiMessage`, representing the model's response.
 
-#### AI Services
+#### AI Services: simple declarative approach
 
-`AI Services` provide a declarative approach: instead of manually calling `ChatModel`, constructing messages, and parsing responses, AI Services let you define a Java interface and have LangChain4j generate the implementation:
+`AI Service` lets you define a Java interface and have LangChain4j generate the implementation:
 
 ```java
 import dev.langchain4j.service.SystemMessage;
@@ -150,18 +161,18 @@ public interface Assistant {
 You then inject and call it like any other service — `assistant.chat("Find me a hotel in Zurich")`. Under the hood, LangChain4j will create a proxy that converts your method call into the appropriate `UserMessage`, adds the `SystemMessage`, calls the `ChatModel`, and extracts the response text.
 
 
-AI Services can also handle chat memory, tool execution, structured output parsing (returning POJOs instead of strings), and RAG — all configured through the builder or annotations.
+AI Services can also handle chat memory, tool execution, structured output parsing, and RAG — all configured through the builder or annotations.
 
 #### Chat Memory
 
-`ChatMemory` manages conversation history automatically, with built-in strategies for retaining recent messages either by count,  or by token limit.
+`ChatMemory` manages conversation history automatically, with optional strategies for retaining recent messages.
 
-For persistence beyond in-memory storage, you can implement the `ChatMemoryStore` interface, like we will do in our project.
+For persistence beyond in-memory storage, you can implement the `ChatMemoryStore` interface, for example in Oracle Database.
 
 
 #### Tools
 
-Tools are predefined actions that can be invoked by the LLM. While this doesn't sound too complicated, it's a significant step forward from the early days of using LLMs in applications, when there was little to no determinism and control. Function calling provides structured outputs that match a defined schema, constrains the LLM to actions you've explicitly defined, and separates reasoning from execution - the LLM decides what to do, but your code controls what actually happens.
+Tools are predefined actions that can be invoked by the LLM. While this doesn't sound too complicated, it's a significant step forward from the early days of using LLMs in applications, when there was little to no determinism and control. Function calling provides structured outputs that match a defined schema, constrains the LLM to actions you've explicitly defined, and separates reasoning from execution: the LLM decides what to do, but your code controls what actually happens.
 
 ```java
 @Tool("Search for Swiss destinations matching the query")
@@ -178,29 +189,13 @@ When the LLM decides to use a tool, it returns an `AiMessage` containing `ToolEx
 
 For Retrieval-Augmented Generation (RAG), LangChain4j provides `EmbeddingModel` and `EmbeddingStore` abstractions.
 
-An `EmbeddingModel` converts text into numerical vectors (embeddings) that capture semantic meaning. LangChain4j even includes some models that run locally via the [ONNX Runtime](https://onnxruntime.ai/), so you can generate embeddings without external API calls.
+An `EmbeddingModel` converts text into numerical vectors (embeddings) that capture semantic meaning. 
 
 An `EmbeddingStore` is essentially a vector database interface with methods to add, search, and remove embeddings. During retrieval, user queries are embedded and vector similarity search finds the most relevant content to inject into the prompt.
 
-
-### Framework Integrations
-
-LangChain4j integrates with major Java frameworks. In our project, we're using the Micronaut integration where the `@AiService` annotation triggers compile-time code generation — no runtime reflection needed.
-
-
-## Project Overview
-
-This project is a travel advisor application, that lets users ask natural language questions about travel options in Switzerland and get relevant recommendations from a database of destinations, hotels, and activities. Instead of exact keyword matching, it converts queries into vector embeddings and finds the most similar entries using cosine distance.
-
-The stack:
-- Micronaut 4 - web framework
-- LangChain4j - LLM orchestration with function calling
-- Oracle 23ai - database with vector support
-- OpenAI - `GPT-4o` for chat, `text-embedding-3-small` for embeddings
-
 ## Micronaut in action
 
-LangChain4j and Micronaut together enable a nice declarative approach to AI integration:
+Micronaut and LangChain4j together enable a nice declarative approach for extending Java applications with AI capabilities:
 
 ```java
 @AiService
@@ -216,13 +211,9 @@ That cab be further injected:
 @Inject Assistant assistant;
 assistant.chat("What should I see in Zurich?");
 ```
+The implementation will be generated at compile time by `micronaut-langchain4j-processor`.
 
-No boilerplate, no manual wiring. The annotation processor generates the implementation at compile time.
-
-
-At compile time, `micronaut-langchain4j-processor` will generate the implementation.
-
-Same goes for the tools the AI can call:
+Similarly, we can create tools for our travel assistant:
 
 ```java
 @Singleton
@@ -238,11 +229,13 @@ public class TravelTools {
 }
 ```
  
-The framework handles the function calling protocol with OpenAI - converting the method signature to a JSON schema, parsing the LLM's function call response, invoking the method, and feeding results back.
+In this case LangChain4j will handle the function calling protocol with OpenAI: converting the method signature to a JSON schema, parsing the LLM's function call response, invoking the method, and feeding the results back.
 
-## Vector Search with Oracle
+## Vector Search with Oracle AI Database
 
-Oracle 23ai has native vector column support. Each travel entry stores its description plus a 1536-dimensional embedding:
+Oracle AI Database supports native vector columns, so you can store embeddings alongside regular relational data.
+
+Simplified, it looks like this:
 
 ```sql
 CREATE TABLE destinations (
@@ -267,23 +260,9 @@ String sql = """
 stmt.setObject(1, queryVector, OracleType.VECTOR);
 ```
 
-What's pretty cool: the vector operations happen in the database engine, not your application. Oracle handles the similarity math at query time.
+What's really cool: the vector operations happen in the database engine, not the application. Oracle will natively handle the similarity calculations at query time.
 
-## Startup Flow
-
-On startup, the app generates embeddings for all entries that don't have them yet:
-
-```java
-public class DataInitializer implements ApplicationEventListener<ServerStartupEvent> {
-
-    @Override
-    public void onApplicationEvent(ServerStartupEvent event) {
-        ... Generate embeddings for destinations, hotels, activities
-    }
-}
-```
-
-This runs once when you first start the app with a fresh database. After that, the embeddings persist and startup is fast.
+On first startup, the app will automatically generate embeddings for any entries that don't have them yet, after which they will be persised in the database.
 
 ## Native Image Support
 
@@ -298,9 +277,7 @@ Micronaut's compile-time approach works great with GraalVM Native Image. Buildin
 While Micronaut already has a great startup on the JVM, with Native Image it drops down to ~30-50ms. More importantly, Memory usage is significantly lower too.
 
 
-The LLM acts as an orchestrator. It interprets user intent, decides which tools to call (and with what parameters), and synthesizes the results into a response. You write the tools, the framework handles the plumbing.
-
-## Let's Run It
+## Bringing everything together
 
 First, let's get our database. You can use Docker or Podman:
 
@@ -312,19 +289,17 @@ podman run -d -p 1521:1521 --name travel-app-db \
   gvenzl/oracle-free:latest
 ```
 
-Once that's ready, set your OpenAI key and start the app:
+Once that's ready (and your `OPENAI_API_KEY` is set), start the app:
 
 ```bash
 export OPENAI_API_KEY=your-key
-./mvnw mn:run
+./target/swiss-travel-advisor
 ```
 
-Now for the fun part — let's ask our assistant for travel recommendations:
+Now for the fun part — let's ask our assistant for travel recommendations. I can highly recommend using [`httpie`](https://github.com/httpie/cli):
 
 ```bash
-curl -X POST http://localhost:8080/api/chat \
-  -H "Content-Type: application/json" \
-  -d '{"message": "recommend best ski resorts"}'
+http POST http://localhost:8080/api/chat message="recommend best ski resorts"
 ```
 
 ```
@@ -339,17 +314,15 @@ Here are some of the best ski resort destinations in Switzerland for you to cons
 3. **Interlaken (Bernese Oberland)**
    - Adventure capital nestled between Lake Thun and Lake Brienz.
 
-Would you like more information on any of these destinations? Let me know if you'd like to add any to your wishlist! 🌟
+Would you like more information on any of these destinations? Let me know if you'd like to add any to your wishlist!
 ```
 
-Notice how "best ski resorts" matched destinations based on meaning, not keywords. That's vector search at work.
+Notice how "best ski resorts" matched destinations based on meaning, not keywords — that's vector search.
 
 The assistant also supports a wishlist feature. Let's add Interlaken:
 
 ```bash
-curl -X POST http://localhost:8080/api/chat \
-  -H "Content-Type: application/json" \
-  -d '{"message": "add Interlaken to a wishlist"}'
+http POST http://localhost:8080/api/chat message="add Interlaken to a wishlist"
 ```
 
 ```
@@ -359,9 +332,7 @@ Interlaken has been added to your wishlist! 🎉 You're going to love the advent
 And we can retrieve it later:
 
 ```bash
-curl -X POST http://localhost:8080/api/chat \
-  -H "Content-Type: application/json" \
-  -d '{"message": "retrieve my wishlist"}'
+http POST http://localhost:8080/api/chat message="retrieve my wishlist"
 ```
 
 ```
@@ -369,15 +340,15 @@ Here's your current wishlist:
 
 - **Interlaken (Bernese Oberland)** 🏞️
 
-If you'd like to add more destinations, hotels, or activities, just let me know! 😊✨
+If you'd like to add more destinations, hotels, or activities, just let me know!✨
 ```
 
-The LLM decides when to call tools, what parameters to pass, and how to present the results — you just define the tools and let the framework handle the rest.
+The LLM decides when to call tools, what parameters to pass, and how to present the results — you just define the tools and rely on Micronaut and Langchain4j for any necessary code generation and other implementation details.
 
 ## Conclusions
 
-AI-powered assistants are a natural fit for travel apps. Users can ask questions in plain language — "find me a cozy ski town" or "add that to my wishlist" — and the system understands intent, not just keywords.
+AI-powered assistants are a natural fit for assistant apps. Users can ask questions in plain language — "recommend a cozy ski town" or "add that to my wishlist" — and the system will do just that.
 
-In this demo, Micronaut gives us a lightweight, fast-starting framework that's ideal for cloud deployments. LangChain4j handles the AI orchestration — chat memory, tool calling, and the RAG pipeline — with clean, declarative abstractions. And Oracle AI Database stores our vectors right alongside application data, so we get powerful similarity search without the overhead of a separate vector database.
+In this demo, Micronaut acts as a lightweight fast-starting framework that's great for CLI tools, assistants, and any applications where speed and memory usage matter. LangChain4j handles the AI orchestration, such working with chat memory and tool calling. Oracle AI Database stores our vectors alongside application data, so we get easy and powerful similarity search out of the box.
 
-Together, these technologies make building intelligent applications surprisingly straightforward. You can learn more at [micronaut.io](https://micronaut.io) and [graalvm.org](https://graalvm.org).
+Together, these technologies offer a convenient way to build fast and smart Java applications. You can learn more and find resources to get started a [graalvm.org](https://graalvm.org) and [micronaut.io](https://micronaut.io).

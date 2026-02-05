@@ -222,7 +222,7 @@ In this case LangChain4j will handle the function calling protocol with OpenAI: 
 
 ## Vector Search with Oracle AI Database
 
-Oracle AI Database supports native vector columns, so you can store embeddings alongside regular relational data. In our schema, all entity tables — destinations, hotels, and activities — include a `description_embedding` column: a 1536-dimensional vector of 32-bit floats, matching the output of OpenAI's `text-embedding-3-small` model.
+Oracle AI Database supports native vector columns, so you can store embeddings alongside regular relational data. In our schema, all entity tables — destinations, hotels, and activities — include a `description_embedding` column: a 1536-dimensional vector, matching the output of OpenAI's `text-embedding-3-small` model.
 
 When a user sends a request, the application embeds that query and passes the resulting vector to the database. Oracle's `VECTOR_DISTANCE` function evaluates cosine distance and orders results by similarity, returning the top matches.
 

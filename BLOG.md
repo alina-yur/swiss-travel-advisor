@@ -92,13 +92,7 @@ Aspect-oriented programming in Micronaut also happens at compile time. Intercept
 
 #### GraalVM Native Image Support
 
-Micronaut was designed with GraalVM and AOT compilation in mind. Since all dependency injection and AOP happens at compile time, there's no reflection to configure for native image compilation.
-
-You can compile and run Micronaut applications as native images with the following commands:
-```bash
-./mvnw package -Dpackaging=native-image
-./target/my-application
-```
+Micronaut was designed with GraalVM and AOT compilation in mind. Since all dependency injection and AOP happens at compile time, there's way less reflection to configure for native image compilation. Together with Micronaut's compile-time approach, Native Image allows applications to start in milliseconds, use a fraction of the memory, and ship as self-contained executables without requiring a JVM installation.
 
 #### Cloud-Native Features
 

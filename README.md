@@ -17,7 +17,7 @@ podman run -d \
   gvenzl/oracle-free:latest
 ```
 
-Wait for the database to be ready (check with `podman logs -f oracle-free`).
+Wait for the database to be ready (check with `podman logs -f travel-app-db`).
 
 ### 2. Set OpenAI API Key
 
@@ -85,4 +85,4 @@ activities (id, destination_id, name, season, description, description_embedding
 ./target/swiss-travel-advisor
 ```
 
-Expected startup time: ~50-100ms
+Expected startup time: ~30-50ms

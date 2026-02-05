@@ -222,37 +222,11 @@ In this case LangChain4j will handle the function calling protocol with OpenAI: 
 
 ## Vector Search with Oracle AI Database
 
-Oracle AI Database supports native vector columns, so you can store embeddings alongside regular relational data.
+Oracle AI Database supports native vector columns, so you can store embeddings alongside regular relational data. In our schema, all entity tables — destinations, hotels, and activities — include a `description_embedding` column: a 1536-dimensional vector of 32-bit floats, matching the output of OpenAI's `text-embedding-3-small` model.
 
-Simplified, it looks like this:
+When a user sends a request, the application embeds that query and passes the resulting vector to the database. Oracle's `VECTOR_DISTANCE` function evaluates cosine distance and orders results by similarity, returning the top matches.
 
-```sql
-CREATE TABLE destinations (
-    id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    name VARCHAR2(255) NOT NULL,
-    region VARCHAR2(255) NOT NULL,
-    description CLOB NOT NULL,
-    description_embedding VECTOR(1536, FLOAT32)
-);
-```
-
-The search query uses `VECTOR_DISTANCE` with cosine similarity:
-
-```java
-String sql = """
-    SELECT id, name, region, description FROM destinations
-    WHERE description_embedding IS NOT NULL
-    ORDER BY VECTOR_DISTANCE(description_embedding, ?, COSINE)
-    FETCH FIRST ? ROWS ONLY
-    """;
-
-stmt.setObject(1, queryVector, OracleType.VECTOR);
-stmt.setInt(2, limit);
-```
-
-What's great about our setup is that the vector operations happen in the database engine, not the application. The database will handle the necessary similarity calculations.
-
-On first startup, the app will automatically generate embeddings for any entries that don't have them yet, after which they will be persisted in the database.
+On startup, the app checks for entries without embeddings and generates them automatically, persisting them in the database for future queries.
 
 ## GraalVM Native Image for performance and efficiency
 

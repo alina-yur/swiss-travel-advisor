@@ -4,6 +4,9 @@ An AI-powered travel assistant for discovering Swiss destinations, hotels, and a
 
 Built with Micronaut 4, LangChain4j, Oracle AI Database, and GraalVM Native Image.
 
+![Micronaut Langchain4j Architecture](assets/micronaut-langchain4j-architecture.png)
+
+
 ## How It Works
 
 When a user asks a question, the app embeds the query using OpenAI's `text-embedding-3-small` model, then runs a vector similarity search in Oracle Database to find destinations that *mean* the right thing — even if they don't contain the exact words. The LLM decides which tools to call (search, wishlist, etc.), and LangChain4j handles execution and message routing.

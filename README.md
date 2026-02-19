@@ -1,6 +1,22 @@
 # Swiss Travel Advisor
 
-An AI-powered travel assistant for discovering Swiss destinations, hotels, and activities. Built with Micronaut, LangChain4j, Oracle Vector Search, and GraalVM.
+An AI-powered travel assistant for discovering Swiss destinations, hotels, and activities. Ask questions in plain language — "recommend a cozy ski town" or "add Zermatt to my wishlist" — and the assistant understands your intent, not just your keywords.
+
+Built with Micronaut 4, LangChain4j, Oracle AI Database, and GraalVM Native Image.
+
+## How It Works
+
+When a user asks a question, the app embeds the query using OpenAI's `text-embedding-3-small` model, then runs a vector similarity search in Oracle Database to find destinations that *mean* the right thing — even if they don't contain the exact words. The LLM decides which tools to call (search, wishlist, etc.), and LangChain4j handles execution and message routing.
+
+On startup, Flyway runs database migrations and loads destinations, hotels, and activities. The `DataInitializer` then generates and persists vector embeddings for all entries, enabling semantic search from the first request.
+
+## Architecture
+
+- `SwissTravelAssistant` — LangChain4j `@AiService` handling conversation and tool orchestration
+- `TravelTools` — `@Tool` methods for semantic search (destinations, hotels, activities) and wishlist management
+- Repositories — JDBC-based with Oracle `VECTOR_DISTANCE(..., COSINE)` queries
+- `EmbeddingService` — generates embeddings via OpenAI
+- `DataInitializer` — populates embeddings on startup
 
 ## Quick Start
 
@@ -17,12 +33,11 @@ podman run -d \
   gvenzl/oracle-free:latest
 ```
 
-Wait for the database to be ready (check with `podman logs -f travel-app-db`).
 
-### 2. Set OpenAI API Key
+### 2. Set Your OpenAI API Key
 
 ```bash
-export OPENAI_API_KEY=
+export OPENAI_API_KEY=your-key
 ```
 
 ### 3. Run the Application
@@ -31,58 +46,35 @@ export OPENAI_API_KEY=
 ./mvnw mn:run
 ```
 
-The application starts at `http://localhost:8080`, runs Flyway migrations, and generates embeddings for all entries.
-
-## Usage
-
-```bash
-curl -X POST http://localhost:8080/api/chat \
-  -H "Content-Type: application/json" \
-  -d '{"message": "I want to visit a peaceful mountain resort"}'
-```
-
-## API Endpoints
-
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/api/chat` | POST | Send a message to the AI assistant |
-| `/api/wishlist` | GET | Retrieve saved wishlist items |
-
-## Tech Stack
-
-| Component | Purpose |
-|-----------|---------|
-| Micronaut 4.10.2 | JVM framework with compile-time DI |
-| LangChain4j | LLM integration and tool orchestration |
-| Oracle AI Database | Database with native vector search |
-| OpenAI | GPT-4o for chat, text-embedding-3-small for embeddings |
-| GraalVM | Native image compilation |
-
-## Architecture
-
-### Core Components
-
-- **SwissTravelAssistant** - LangChain4j `@AiService` handling conversation and tool orchestration
-- **TravelTools** - `@Tool` methods for semantic search (destinations, hotels, activities) and wishlist management
-- **Repositories** - JDBC-based with Oracle vector distance queries using `VECTOR_DISTANCE(..., COSINE)`
-- **EmbeddingService** - Generates embeddings via OpenAI
-- **DataInitializer** - Populates embeddings on startup
-
-### Data Model
-
-```sql
-destinations (id, name, region, description, description_embedding VECTOR(1536, FLOAT32))
-hotels (id, destination_id, name, price_per_night, description, description_embedding VECTOR(1536, FLOAT32))
-activities (id, destination_id, name, season, description, description_embedding VECTOR(1536, FLOAT32))
-```
-
-**Sample Data:** 6 destinations, 10 hotels, 6 activities
-
-## Building Native Image
+## Building a Native Image
 
 ```bash
 ./mvnw package -Dpackaging=native-image
 ./target/swiss-travel-advisor
 ```
 
-Expected startup time: ~30-50ms
+The app starts at `http://localhost:8080`.
+
+The the native executable:
+- Has the size of 132 MB
+- Starts and connects to the database in 122 ms
+- Even under load, consumes only around 98 MB RAM.
+
+
+## Example Queries
+
+```bash
+http POST http://localhost:8080/api/chat message="recommend best ski resorts"
+
+
+http POST http://localhost:8080/api/chat message="add Interlaken to my wishlist"
+http POST http://localhost:8080/api/chat message="retrieve my wishlist"
+```
+
+Or with curl:
+
+```bash
+curl -X POST http://localhost:8080/api/chat \
+  -H "Content-Type: application/json" \
+  -d '{"message": "I want to visit a peaceful mountain resort"}'
+```

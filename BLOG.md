@@ -243,23 +243,13 @@ While Micronaut already has a great startup on the JVM, with Native Image it dro
 
 ## Bringing everything together
 
-First, let's start our database. You can use Docker or Podman:
-
-```bash
-podman run -d -p 1521:1521 --name travel-app-db \
-  -e ORACLE_PASSWORD=mypassword \
-  -e APP_USER=appuser \
-  -e APP_USER_PASSWORD=mypassword \
-  gvenzl/oracle-free:latest
-```
-
-Once that's ready (and your `OPENAI_API_KEY` is set), start the app:
+Set your `OPENAI_API_KEY`, then start the app:
 
 ```bash
 export OPENAI_API_KEY=your-key
 ./target/swiss-travel-advisor
 ```
-This starts the application and populates the database with our predefined data. Flyway runs the migration scripts on startup, creating tables and inserting the destinations, hotels, and activities. Once the server is running, the `DataInitializer` generates vector embeddings, enabling semantic search.
+Micronaut Test Resources provisions Oracle Database automatically for development and testing. This starts the application and populates the database with our predefined data. Flyway runs the migration scripts on startup, creating tables and inserting the destinations, hotels, and activities. Once the server is running, the `DataInitializer` generates vector embeddings, enabling semantic search.
 
 Now for the fun part — let's ask our assistant for travel recommendations. I can highly recommend using [`httpie`](https://github.com/httpie/cli):
 

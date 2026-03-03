@@ -23,31 +23,19 @@ On startup, Flyway runs database migrations and loads destinations, hotels, and 
 
 ## Quick Start
 
-### 1. Start Oracle Database
-
-```bash
-podman run -d \
-  -p 1521:1521 \
-  --name travel-app-db \
-  -e ORACLE_PASSWORD=mypassword \
-  -e APP_USER=appuser \
-  -e APP_USER_PASSWORD=mypassword \
-  --shm-size=2g \
-  gvenzl/oracle-free:latest
-```
-
-
-### 2. Set Your OpenAI API Key
+### 1. Set Your OpenAI API Key
 
 ```bash
 export OPENAI_API_KEY=your-key
 ```
 
-### 3. Run the Application
+### 2. Run the Application
 
 ```bash
 ./mvnw mn:run
 ```
+
+Micronaut Test Resources now provisions Oracle Database automatically during development and tests, so no manual container startup is required.
 
 ## Building a Native Image
 

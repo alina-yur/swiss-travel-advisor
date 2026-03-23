@@ -23,19 +23,40 @@ On startup, Flyway runs database migrations and loads destinations, hotels, and 
 
 ## Quick Start
 
-### 1. Set Your OpenAI API Key
+### 1. Configure Oracle Database
+
+By default, this project uses [Oracle Autonomous Database](https://www.oracle.com/autonomous-database/) via TLS connection.
+
+Required environment variables:
+
+```bash
+export DATASOURCES_DEFAULT_URL='<oracle-jdbc-url>'
+export DATASOURCES_DEFAULT_USERNAME=
+export DATASOURCES_DEFAULT_PASSWORD=
+```
+
+### 2. Set Your OpenAI API Key
 
 ```bash
 export OPENAI_API_KEY=your-key
 ```
 
-### 2. Run the Application
+### 3. Run the Application
 
 ```bash
 ./mvnw mn:run
 ```
 
-Micronaut Test Resources now provisions Oracle Database automatically during development and tests, so no manual container startup is required.
+Micronaut Test Resources can also provision Oracle Database automatically for development and testing. This starts the application and populates the database with our predefined data. Flyway runs the migration scripts on startup, creating tables and inserting the destinations, hotels, and activities. Once the server is running, the `DataInitializer` generates vector embeddings, enabling semantic search.
+
+To use that local path instead, unset the datasource variables before starting the app:
+
+```bash
+unset DATASOURCES_DEFAULT_URL
+unset DATASOURCES_DEFAULT_USERNAME
+unset DATASOURCES_DEFAULT_PASSWORD
+./mvnw mn:run
+```
 
 ## Building a Native Image
 

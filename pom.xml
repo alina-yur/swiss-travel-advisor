@@ -17,7 +17,7 @@
     <jdk.version>25</jdk.version>
     <release.version>25</release.version>
     <micronaut.version>4.10.8</micronaut.version>
-    <micronaut.test.resources.enabled>true</micronaut.test.resources.enabled>
+    <micronaut.test.resources.enabled>false</micronaut.test.resources.enabled>
     <micronaut.aot.enabled>false</micronaut.aot.enabled>
     <micronaut.aot.packageName>com.example.aot.generated</micronaut.aot.packageName>
     <micronaut.runtime>netty</micronaut.runtime>

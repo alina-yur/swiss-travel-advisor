@@ -7,6 +7,7 @@
     </appender>
 
     <logger name="com.example" level="INFO"/>
+    <logger name="org.flywaydb.core.FlywayExecutor" level="WARN"/>
 
     <root level="info">
         <appender-ref ref="STDOUT" />

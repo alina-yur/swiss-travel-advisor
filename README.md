@@ -26,11 +26,27 @@ On startup, Flyway runs database migrations and loads destinations, hotels, and 
 ### 1. Configure Oracle Database
 
 By default, this project uses [Oracle Autonomous Database](https://www.oracle.com/autonomous-database/) via TLS connection.
+It now shares the same environment variable names as
+`/home/opc/demo-central/devoxx-greece/pet-vector-search`.
 
 Required environment variables:
 
 ```bash
-export DATASOURCES_DEFAULT_URL='<oracle-jdbc-url>'
+export ORACLE_JDBC_URL='<oracle-jdbc-url>'
+export DB_PASSWORD=
+```
+
+Optional environment variable:
+
+```bash
+export DB_USERNAME=ADMIN
+```
+
+If you already use Micronaut-native datasource variables, these still override the
+shared names:
+
+```bash
+export DATASOURCES_DEFAULT_URL=
 export DATASOURCES_DEFAULT_USERNAME=
 export DATASOURCES_DEFAULT_PASSWORD=
 ```
@@ -47,15 +63,15 @@ export OPENAI_API_KEY=your-key
 ./mvnw mn:run
 ```
 
-Micronaut Test Resources can also provision Oracle Database automatically for development and testing. This starts the application and populates the database with our predefined data. Flyway runs the migration scripts on startup, creating tables and inserting the destinations, hotels, and activities. Once the server is running, the `DataInitializer` generates vector embeddings, enabling semantic search.
+Flyway runs the migration scripts on startup, creating tables and inserting the
+destinations, hotels, and activities. Once the server is running, the
+`DataInitializer` generates vector embeddings, enabling semantic search.
 
-To use that local path instead, unset the datasource variables before starting the app:
+Micronaut Test Resources is now disabled by default. If you explicitly want that
+old local/dev path, start with:
 
 ```bash
-unset DATASOURCES_DEFAULT_URL
-unset DATASOURCES_DEFAULT_USERNAME
-unset DATASOURCES_DEFAULT_PASSWORD
-./mvnw mn:run
+./mvnw -Dmicronaut.test.resources.enabled=true mn:run
 ```
 
 ## Building a Native Image

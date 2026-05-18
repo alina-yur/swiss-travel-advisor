@@ -10,18 +10,20 @@
   <parent>
     <groupId>io.micronaut.platform</groupId>
     <artifactId>micronaut-parent</artifactId>
-    <version>4.10.8</version>
+    <version>4.10.14</version>
   </parent>
   <properties>
     <packaging>jar</packaging>
     <jdk.version>25</jdk.version>
     <release.version>25</release.version>
-    <micronaut.version>4.10.8</micronaut.version>
+    <micronaut.version>4.10.14</micronaut.version>
     <micronaut.test.resources.enabled>false</micronaut.test.resources.enabled>
+    <micronaut.langchain4j.version>1.5.0</micronaut.langchain4j.version>
     <micronaut.aot.enabled>false</micronaut.aot.enabled>
     <micronaut.aot.packageName>com.example.aot.generated</micronaut.aot.packageName>
     <micronaut.runtime>netty</micronaut.runtime>
     <exec.mainClass>com.example.Application</exec.mainClass>
+    <flyway.version>11.20.3</flyway.version>
   </properties>
 
   <dependencies>
@@ -68,6 +70,7 @@
     <dependency>
       <groupId>com.oracle.database.jdbc</groupId>
       <artifactId>ojdbc11</artifactId>
+      <version>23.26.2.0.0</version>
       <scope>compile</scope>
     </dependency>
     <dependency>

@@ -1,4 +1,9 @@
 {
+  "resources": [
+    {
+      "glob": "org/flywaydb/core/internal/version.txt"
+    }
+  ],
   "reflection": [
     {
       "type": {
@@ -20,37 +25,36 @@
       "allDeclaredFields": true
     },
     {
+      "type": "org.flywaydb.core.internal.logging.slf4j.Slf4jLogCreator",
+      "allDeclaredConstructors": true
+    },
+    {
+      "type": "com.zaxxer.hikari.util.ConcurrentBag$IConcurrentBagEntry[]"
+    },
+    {
+      "type": "com.fasterxml.jackson.databind.PropertyNamingStrategies$SnakeCaseStrategy",
+      "allDeclaredConstructors": true
+    },
+    {
       "type": "dev.langchain4j.model.openai.internal.embedding.OpenAiEmbeddingDeserializer",
-      "allDeclaredConstructors": true,
-      "allPublicConstructors": true,
-      "allDeclaredMethods": true
+      "allDeclaredConstructors": true
     },
     {
-      "type": "dev.langchain4j.model.openai.internal.chat.OpenAiChatCompletionDeserializer",
-      "allDeclaredConstructors": true,
-      "allDeclaredMethods": true
-    },
-    {
-      "type": "dev.langchain4j.model.openai.internal.api.OpenAiEmbeddingResponse",
+      "type": { "pattern": "dev.langchain4j.model.openai.internal.embedding.*" },
       "allDeclaredConstructors": true,
       "allDeclaredMethods": true,
       "allDeclaredFields": true
     },
     {
-      "type": "dev.langchain4j.model.openai.internal.api.OpenAiEmbedding",
+      "type": { "pattern": "dev.langchain4j.model.openai.internal.chat.*" },
       "allDeclaredConstructors": true,
       "allDeclaredMethods": true,
       "allDeclaredFields": true
     },
     {
-      "type": "dev.langchain4j.model.openai.internal.api.OpenAiUsage",
+      "type": { "pattern": "dev.langchain4j.model.openai.internal.shared.*" },
       "allDeclaredConstructors": true,
       "allDeclaredMethods": true,
-      "allDeclaredFields": true
-    },
-    {
-      "type": "dev.langchain4j.model.openai.internal.api.OpenAiError",
-      "allDeclaredConstructors": true,
       "allDeclaredFields": true
     }
   ]

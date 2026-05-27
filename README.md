@@ -2,7 +2,7 @@
 
 An AI-powered travel assistant for discovering Swiss destinations, hotels, and activities. Ask questions in plain language — "recommend a cozy ski town" or "add Zermatt to my wishlist" — and the assistant understands your intent, not just your keywords.
 
-Built with Micronaut 4, LangChain4j, Oracle AI Database, and GraalVM Native Image.
+Built with Micronaut 5, LangChain4j, Oracle AI Database, and GraalVM Native Image.
 
 ![Micronaut Langchain4j Architecture](assets/micronaut-langchain4j-architecture.png)
 

@@ -10,20 +10,19 @@
   <parent>
     <groupId>io.micronaut.platform</groupId>
     <artifactId>micronaut-parent</artifactId>
-    <version>4.10.14</version>
+    <version>5.0.0</version>
   </parent>
   <properties>
     <packaging>jar</packaging>
     <jdk.version>25</jdk.version>
     <release.version>25</release.version>
-    <micronaut.version>4.10.14</micronaut.version>
+    <micronaut.version>5.0.0</micronaut.version>
     <micronaut.test.resources.enabled>false</micronaut.test.resources.enabled>
-    <micronaut.langchain4j.version>1.5.0</micronaut.langchain4j.version>
     <micronaut.aot.enabled>false</micronaut.aot.enabled>
     <micronaut.aot.packageName>com.example.aot.generated</micronaut.aot.packageName>
     <micronaut.runtime>netty</micronaut.runtime>
     <exec.mainClass>com.example.Application</exec.mainClass>
-    <flyway.version>11.20.3</flyway.version>
+    <graalvm.metadata-repository.enabled>false</graalvm.metadata-repository.enabled>
   </properties>
 
   <dependencies>
@@ -36,11 +35,6 @@
       <groupId>io.micronaut.serde</groupId>
       <artifactId>micronaut-serde-jackson</artifactId>
       <scope>compile</scope>
-    </dependency>
-    <dependency>
-      <groupId>ch.qos.logback</groupId>
-      <artifactId>logback-classic</artifactId>
-      <scope>runtime</scope>
     </dependency>
     <dependency>
       <groupId>io.micronaut</groupId>
@@ -70,7 +64,6 @@
     <dependency>
       <groupId>com.oracle.database.jdbc</groupId>
       <artifactId>ojdbc11</artifactId>
-      <version>23.26.2.0.0</version>
       <scope>compile</scope>
     </dependency>
     <dependency>
@@ -146,11 +139,49 @@
         <configuration>
           <buildArgs>
             <buildArg>-H:+SharedArenaSupport</buildArg>
+            <buildArg>--initialize-at-build-time=org.slf4j.simple.SimpleLogger,org.slf4j.simple.SimpleLoggerConfiguration,org.slf4j.simple.SimpleLoggerFactory,org.slf4j.simple.SimpleServiceProvider,org.slf4j.simple.OutputChoice,org.slf4j.simple.OutputChoice$OutputChoiceType</buildArg>
+            <buildArg>--initialize-at-run-time=io.netty.handler.pcap.PcapWriteHandler$WildcardAddressHolder</buildArg>
+            <buildArg>--initialize-at-run-time=io.netty.handler.codec.http2.CleartextHttp2ServerUpgradeHandler,io.netty.handler.codec.http2.Http2CodecUtil</buildArg>
           </buildArgs>
         </configuration>
       </plugin>
 
     </plugins>
   </build>
+
+  <profiles>
+    <profile>
+      <id>jvm-logging</id>
+      <activation>
+        <property>
+          <name>packaging</name>
+          <value>!native-image</value>
+        </property>
+      </activation>
+      <dependencies>
+        <dependency>
+          <groupId>ch.qos.logback</groupId>
+          <artifactId>logback-classic</artifactId>
+          <scope>runtime</scope>
+        </dependency>
+      </dependencies>
+    </profile>
+    <profile>
+      <id>native-logging</id>
+      <activation>
+        <property>
+          <name>packaging</name>
+          <value>native-image</value>
+        </property>
+      </activation>
+      <dependencies>
+        <dependency>
+          <groupId>org.slf4j</groupId>
+          <artifactId>slf4j-simple</artifactId>
+          <scope>runtime</scope>
+        </dependency>
+      </dependencies>
+    </profile>
+  </profiles>
 
 </project>

@@ -11,43 +11,80 @@ import com.example.repository.WishlistRepository;
 import com.example.service.EmbeddingService;
 import dev.langchain4j.agent.tool.Tool;
 import jakarta.inject.Singleton;
-
+import com.example.service.RerankingService;
 import java.util.List;
 
 @Singleton
 public class TravelTools {
+
+    private static final int DESTINATION_CANDIDATE_LIMIT = 30;
+    private static final int FINAL_RESULT_LIMIT = 5;
 
     private final EmbeddingService embeddingService;
     private final DestinationRepository destinationRepository;
     private final HotelRepository hotelRepository;
     private final ActivityRepository activityRepository;
     private final WishlistRepository wishlistRepository;
+    private final RerankingService rerankingService;
 
     public TravelTools(
         EmbeddingService embeddingService,
         DestinationRepository destinationRepository,
         HotelRepository hotelRepository,
         ActivityRepository activityRepository,
-        WishlistRepository wishlistRepository
+        WishlistRepository wishlistRepository,
+        RerankingService rerankingService
     ) {
         this.embeddingService = embeddingService;
         this.destinationRepository = destinationRepository;
         this.hotelRepository = hotelRepository;
         this.activityRepository = activityRepository;
         this.wishlistRepository = wishlistRepository;
+        this.rerankingService = rerankingService;
     }
 
     @Tool("Search for Swiss destinations by preference (e.g., 'mountain views', 'lakeside', 'winter sports').")
     public String searchDestinations(String query) {
+        long startTime = System.currentTimeMillis();
+
         float[] queryVector = embeddingService.generateEmbedding(query);
-        List<Destination> results = destinationRepository.searchByVector(queryVector, 5);
+
+        long vectorSearchStart = System.currentTimeMillis();
+
+        List<Destination> candidates = destinationRepository.searchByVector(
+                queryVector,
+                DESTINATION_CANDIDATE_LIMIT
+        );
+
+        long vectorSearchEnd = System.currentTimeMillis();
+
+        List<Destination> results = rerankingService.rerank(
+                query,
+                candidates,
+                destination -> destination.name() + " " + destination.region() + " " + destination.description(),
+                FINAL_RESULT_LIMIT
+        );
+
+        long rerankingEnd = System.currentTimeMillis();
+
         if (results.isEmpty()) {
             return "No destinations found matching: " + query;
         }
-        StringBuilder sb = new StringBuilder("Found destinations:\n");
+
+        StringBuilder sb = new StringBuilder("Found destinations after reranking:\n");
         for (Destination d : results) {
             sb.append(String.format("- %s (ID:%d, %s): %s\n", d.name(), d.id(), d.region(), d.description()));
         }
+
+        sb.append(String.format(
+                "\nRetrieval metrics: candidates=%d, finalResults=%d, vectorSearchMs=%d, rerankingMs=%d, totalMs=%d",
+                candidates.size(),
+                results.size(),
+                vectorSearchEnd - vectorSearchStart,
+                rerankingEnd - vectorSearchEnd,
+                rerankingEnd - startTime
+        ));
+
         return sb.toString();
     }
 

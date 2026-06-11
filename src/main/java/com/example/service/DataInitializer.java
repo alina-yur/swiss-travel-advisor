@@ -1,11 +1,9 @@
 package com.example.service;
 
-import com.example.model.Activity;
-import com.example.model.Destination;
-import com.example.model.Hotel;
-import com.example.repository.ActivityRepository;
-import com.example.repository.DestinationRepository;
-import com.example.repository.HotelRepository;
+import com.example.repository.EmbeddingBackfillRepository;
+import com.example.repository.EmbeddingBackfillRepository.ActivityEmbeddingSeed;
+import com.example.repository.EmbeddingBackfillRepository.DestinationEmbeddingSeed;
+import com.example.repository.EmbeddingBackfillRepository.HotelEmbeddingSeed;
 import io.micronaut.context.event.ApplicationEventListener;
 import io.micronaut.runtime.server.event.ServerStartupEvent;
 import jakarta.inject.Singleton;
@@ -17,19 +15,13 @@ public class DataInitializer implements ApplicationEventListener<ServerStartupEv
     private static final Logger LOG = LoggerFactory.getLogger(DataInitializer.class);
 
     private final EmbeddingService embeddingService;
-    private final DestinationRepository destinationRepository;
-    private final HotelRepository hotelRepository;
-    private final ActivityRepository activityRepository;
+    private final EmbeddingBackfillRepository embeddingBackfillRepository;
 
     public DataInitializer(
             EmbeddingService embeddingService,
-            DestinationRepository destinationRepository,
-            HotelRepository hotelRepository,
-            ActivityRepository activityRepository) {
+            EmbeddingBackfillRepository embeddingBackfillRepository) {
         this.embeddingService = embeddingService;
-        this.destinationRepository = destinationRepository;
-        this.hotelRepository = hotelRepository;
-        this.activityRepository = activityRepository;
+        this.embeddingBackfillRepository = embeddingBackfillRepository;
     }
 
     @Override
@@ -41,24 +33,24 @@ public class DataInitializer implements ApplicationEventListener<ServerStartupEv
             int hotelCount = 0;
             int activityCount = 0;
 
-            for (Destination destination : destinationRepository.findWithoutEmbedding()) {
+            for (DestinationEmbeddingSeed destination : embeddingBackfillRepository.findDestinationsWithoutEmbedding()) {
                 String text = destination.name() + " " + destination.region() + ". " + destination.description();
                 float[] embedding = embeddingService.generateEmbedding(text);
-                destinationRepository.updateEmbedding(destination.id(), embedding);
+                embeddingBackfillRepository.updateDestinationEmbedding(destination.id(), embedding);
                 destinationCount++;
             }
 
-            for (Hotel hotel : hotelRepository.findWithoutEmbedding()) {
+            for (HotelEmbeddingSeed hotel : embeddingBackfillRepository.findHotelsWithoutEmbedding()) {
                 String text = hotel.name() + " in " + hotel.destinationName() + ". " + hotel.description();
                 float[] embedding = embeddingService.generateEmbedding(text);
-                hotelRepository.updateEmbedding(hotel.id(), embedding);
+                embeddingBackfillRepository.updateHotelEmbedding(hotel.id(), embedding);
                 hotelCount++;
             }
 
-            for (Activity activity : activityRepository.findWithoutEmbedding()) {
-                String text = activity.name() + " in " + activity.destinationName() + ". " + activity.description();
+            for (ActivityEmbeddingSeed activity : embeddingBackfillRepository.findActivitiesWithoutEmbedding()) {
+                String text = activity.name() + " in " + activity.destinationName() + " (" + activity.season() + "). " + activity.description();
                 float[] embedding = embeddingService.generateEmbedding(text);
-                activityRepository.updateEmbedding(activity.id(), embedding);
+                embeddingBackfillRepository.updateActivityEmbedding(activity.id(), embedding);
                 activityCount++;
             }
 

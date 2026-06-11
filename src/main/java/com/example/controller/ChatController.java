@@ -12,6 +12,7 @@ import io.micronaut.serde.annotation.Serdeable;
 @Controller("/api")
 public class ChatController {
     private final SwissTravelAssistant assistant;
+    private final Object chatLock = new Object();
 
     public ChatController(SwissTravelAssistant assistant) {
         this.assistant = assistant;
@@ -22,11 +23,15 @@ public class ChatController {
 
     @Post(uri = "/chat", consumes = MediaType.APPLICATION_JSON, produces = MediaType.TEXT_PLAIN)
     public String chat(@Body ChatRequest req) {
-        return assistant.chat(req.message());
+        synchronized (chatLock) {
+            return assistant.chat(req.message());
+        }
     }
 
     @Get(uri = "/chat", produces = MediaType.TEXT_PLAIN)
     public String chatGet(@QueryValue("q") String query) {
-        return assistant.chat(query);
+        synchronized (chatLock) {
+            return assistant.chat(query);
+        }
     }
 }

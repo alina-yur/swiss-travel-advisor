@@ -1,6 +1,7 @@
 package com.example.repository;
 
 import com.example.model.WishlistItem;
+import io.micronaut.data.connection.annotation.Connectable;
 import jakarta.inject.Singleton;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -11,6 +12,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 @Singleton
+@Connectable
 public class WishlistRepository {
     private static final Logger LOG = LoggerFactory.getLogger(WishlistRepository.class);
     private static final String SELECT_WISHLIST = "SELECT id, item_type, item_id FROM wishlist_items";

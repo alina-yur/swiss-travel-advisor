@@ -22,7 +22,7 @@
     <micronaut.aot.packageName>com.example.aot.generated</micronaut.aot.packageName>
     <micronaut.runtime>netty</micronaut.runtime>
     <exec.mainClass>com.example.Application</exec.mainClass>
-    <graalvm.metadata-repository.enabled>false</graalvm.metadata-repository.enabled>
+    <graalvm.metadata-repository.enabled>true</graalvm.metadata-repository.enabled>
   </properties>
 
   <dependencies>

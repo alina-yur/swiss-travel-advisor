@@ -1,7 +1,9 @@
 package com.example.service;
 
 import com.example.tools.TravelTools;
+import dev.langchain4j.service.MemoryId;
 import dev.langchain4j.service.SystemMessage;
+import dev.langchain4j.service.UserMessage;
 import io.micronaut.langchain4j.annotation.AiService;
 
 @AiService(tools = TravelTools.class)
@@ -39,5 +41,5 @@ public interface SwissTravelAssistant {
 
             Be helpful and enthusiastic.
             """)
-    String chat(String userMessage);
+    String chat(@MemoryId String conversationId, @UserMessage String userMessage);
 }

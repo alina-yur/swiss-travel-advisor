@@ -9,7 +9,7 @@ Built with Micronaut 5, LangChain4j, Oracle AI Database, and GraalVM Native Imag
 
 ## How It Works
 
-When a user asks a question, the app embeds the query using OpenAI's `text-embedding-3-small` model, then uses Micronaut Data repositories to run Oracle AI Database vector similarity search. For location-aware requests, it combines that with Oracle Spatial radius filters over seeded Swiss destination coordinates. The LLM decides which tools to call (search, nearby search, wishlist, etc.), and LangChain4j handles execution and message routing.
+When a user asks a question, the app embeds the query using OpenAI's `text-embedding-3-small` model, then uses Micronaut Data repositories to run Oracle AI Database vector similarity search. For location-aware requests, it combines that with Oracle Spatial radius filters over seeded Swiss destination coordinates. The LLM decides which tools to call (search, nearby search, wishlist, etc.), and LangChain4j handles execution and message routing. A bounded chat history is stored in Oracle by conversation ID so follow-up requests retain their context across application restarts.
 
 Nearby search resolves location names from the seeded destination catalog, not an external geocoder. The current anchors are Zermatt, Interlaken, Lucerne, Lausanne, St. Moritz, Lugano, and Zurich.
 
@@ -22,6 +22,7 @@ On startup, Flyway runs database migrations and loads destinations, hotels, and 
 - Repositories — Micronaut Data JDBC repositories using Oracle vector `Near` queries and Oracle Spatial radius queries
 - `EmbeddingService` — generates embeddings via OpenAI
 - `DataInitializer` — populates embeddings on startup
+- `OracleChatMemoryStore` — persists each conversation's bounded message window as JSON in Oracle
 
 ## Quick Start
 
@@ -36,12 +37,6 @@ Required environment variables:
 ```bash
 export ORACLE_JDBC_URL='<oracle-jdbc-url>'
 export DB_PASSWORD=
-```
-
-Optional environment variable:
-
-```bash
-export DB_USERNAME=ADMIN
 ```
 
 If you already use Micronaut-native datasource variables, these still override the
@@ -111,6 +106,21 @@ curl -X POST http://localhost:8080/api/chat \
   -H "Content-Type: application/json" \
   -d '{"message": "I want to visit a peaceful mountain resort"}'
 ```
+
+The JSON response contains both `conversationId` and `message`. Pass the same ID
+on a follow-up request:
+
+```bash
+curl -X POST http://localhost:8080/api/chat \
+  -H "Content-Type: application/json" \
+  -d '{
+    "conversationId": "<conversation-id-from-the-first-response>",
+    "message": "Which of those is the most affordable?"
+  }'
+```
+
+Omit `conversationId` to start a new conversation. Conversation IDs are UUIDs,
+and the most recent 20 messages in each conversation are retained.
 
 ## Location-Aware Search
 

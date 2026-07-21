@@ -29,8 +29,6 @@ On startup, Flyway runs database migrations and loads destinations, hotels, and 
 ### 1. Configure Oracle Database
 
 By default, this project uses [Oracle Autonomous Database](https://www.oracle.com/autonomous-database/) via TLS connection.
-It now shares the same environment variable names as
-`/home/opc/demo-central/devoxx-greece/pet-vector-search`.
 
 Required environment variables:
 
@@ -80,6 +78,11 @@ old local/dev path, start with:
 
 The app starts at `http://localhost:8080`.
 
+Open that URL in a browser for the chat interface. It keeps conversation IDs
+behind the scenes, lets you reopen previous journeys, and shows the selected
+conversation's wishlist in the sidebar. Wishlist items are saved only after an
+explicit user request. The JSON API remains available under `/api`.
+
 The native executable:
 - Has the size of 132 MB
 - Starts and connects to the database in 122 ms
@@ -93,11 +96,10 @@ http POST http://localhost:8080/api/chat message="recommend best ski resorts"
 http POST http://localhost:8080/api/chat message="find quiet lakeside hotels near Lucerne under 250 CHF"
 http POST http://localhost:8080/api/chat message="show scenic activities within 40 km of Interlaken"
 http POST http://localhost:8080/api/chat message="show best activities in Zurich"
-
-
-http POST http://localhost:8080/api/chat message="add Interlaken to my wishlist"
-http POST http://localhost:8080/api/chat message="retrieve my wishlist"
 ```
+
+Use the same `conversationId` for follow-up requests, including adding or
+retrieving items from that conversation's wishlist.
 
 Or with curl:
 

@@ -1,17 +1,20 @@
 package com.example.controller;
 
+import com.example.memory.OracleChatMemoryStore;
 import com.example.service.SwissTravelAssistant;
 import io.micronaut.http.MediaType;
 import io.micronaut.http.HttpStatus;
 import io.micronaut.http.annotation.Body;
 import io.micronaut.http.annotation.Controller;
 import io.micronaut.http.annotation.Get;
+import io.micronaut.http.annotation.PathVariable;
 import io.micronaut.http.annotation.Post;
 import io.micronaut.http.annotation.QueryValue;
 import io.micronaut.http.exceptions.HttpStatusException;
 import io.micronaut.core.annotation.Nullable;
 import io.micronaut.serde.annotation.Serdeable;
 
+import java.util.List;
 import java.util.UUID;
 
 @Controller("/api")
@@ -19,13 +22,30 @@ public class ChatController {
     private static final int LOCK_STRIPES = 64;
 
     private final SwissTravelAssistant assistant;
+    private final OracleChatMemoryStore chatMemoryStore;
     private final Object[] conversationLocks = new Object[LOCK_STRIPES];
 
-    public ChatController(SwissTravelAssistant assistant) {
+    public ChatController(SwissTravelAssistant assistant, OracleChatMemoryStore chatMemoryStore) {
         this.assistant = assistant;
+        this.chatMemoryStore = chatMemoryStore;
         for (int i = 0; i < conversationLocks.length; i++) {
             conversationLocks[i] = new Object();
         }
+    }
+
+    @Get(uri = "/conversations", produces = MediaType.APPLICATION_JSON)
+    public List<OracleChatMemoryStore.ConversationSummary> conversations() {
+        return chatMemoryStore.listConversations();
+    }
+
+    @Get(uri = "/conversations/{conversationId}", produces = MediaType.APPLICATION_JSON)
+    public OracleChatMemoryStore.ConversationDetail conversation(@PathVariable String conversationId) {
+        String id = normalizeConversationId(conversationId);
+        OracleChatMemoryStore.ConversationDetail conversation = chatMemoryStore.getConversation(id);
+        if (conversation == null) {
+            throw new HttpStatusException(HttpStatus.NOT_FOUND, "Conversation not found");
+        }
+        return conversation;
     }
 
     @Serdeable

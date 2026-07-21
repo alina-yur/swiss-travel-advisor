@@ -80,6 +80,11 @@ old local/dev path, start with:
 
 The app starts at `http://localhost:8080`.
 
+Open that URL in a browser for the chat interface. It keeps conversation IDs
+behind the scenes, lets you reopen previous journeys, and shows the selected
+conversation's wishlist in the sidebar. Wishlist items are saved only after an
+explicit user request. The JSON API remains available under `/api`.
+
 The native executable:
 - Has the size of 132 MB
 - Starts and connects to the database in 122 ms

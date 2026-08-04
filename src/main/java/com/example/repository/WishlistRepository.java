@@ -15,7 +15,32 @@ import java.util.List;
 @Connectable
 public class WishlistRepository {
     private static final Logger LOG = LoggerFactory.getLogger(WishlistRepository.class);
-    private static final String SELECT_WISHLIST = "SELECT id, item_type, item_id FROM wishlist_items";
+    private static final String SELECT_WISHLIST = """
+        SELECT w.id, w.item_type, w.item_id,
+               CASE w.item_type
+                   WHEN 'destination' THEN (SELECT d.name FROM destinations d WHERE d.id = w.item_id)
+                   WHEN 'hotel' THEN (SELECT h.name FROM hotels h WHERE h.id = w.item_id)
+                   WHEN 'activity' THEN (SELECT a.name FROM activities a WHERE a.id = w.item_id)
+               END AS item_name,
+               CASE w.item_type
+                   WHEN 'destination' THEN (SELECT d.region FROM destinations d WHERE d.id = w.item_id)
+                   WHEN 'hotel' THEN (SELECT 'CHF ' || TO_CHAR(h.price_per_night, 'FM9999990') || ' / night' FROM hotels h WHERE h.id = w.item_id)
+                   WHEN 'activity' THEN (SELECT a.season FROM activities a WHERE a.id = w.item_id)
+               END AS item_detail
+        FROM wishlist_items w
+        WHERE w.conversation_id = ?
+        ORDER BY w.id DESC
+        """;
+    private static final String MERGE_WISHLIST = """
+        MERGE INTO wishlist_items target
+        USING (SELECT ? AS conversation_id, ? AS item_type, ? AS item_id FROM dual) source
+        ON (target.conversation_id = source.conversation_id
+            AND target.item_type = source.item_type
+            AND target.item_id = source.item_id)
+        WHEN NOT MATCHED THEN
+            INSERT (conversation_id, item_type, item_id)
+            VALUES (source.conversation_id, source.item_type, source.item_id)
+        """;
 
     private final DataSource dataSource;
 
@@ -23,36 +48,31 @@ public class WishlistRepository {
         this.dataSource = dataSource;
     }
 
-    public WishlistItem save(WishlistItem item) {
-        String sql = "INSERT INTO wishlist_items (item_type, item_id) VALUES (?, ?)";
-
+    public boolean save(String conversationId, WishlistItem item) {
         try (Connection conn = dataSource.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql, new String[]{"id"})) {
-
-            stmt.setString(1, item.itemType());
-            stmt.setLong(2, item.itemId());
+             PreparedStatement stmt = conn.prepareStatement(MERGE_WISHLIST)) {
+            stmt.setString(1, conversationId);
+            stmt.setString(2, item.itemType());
+            stmt.setLong(3, item.itemId());
             stmt.executeUpdate();
-
-            try (ResultSet rs = stmt.getGeneratedKeys()) {
-                if (rs.next()) {
-                    return new WishlistItem(rs.getLong(1), item.itemType(), item.itemId());
-                }
-            }
+            return true;
         } catch (SQLException e) {
             LOG.error("Error saving wishlist item", e);
+            return false;
         }
-        return null;
     }
 
-    public List<WishlistItem> findAll() {
+    public List<WishlistItem> findAll(String conversationId) {
         List<WishlistItem> results = new ArrayList<>();
 
         try (Connection conn = dataSource.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(SELECT_WISHLIST);
-             ResultSet rs = stmt.executeQuery()) {
+             PreparedStatement stmt = conn.prepareStatement(SELECT_WISHLIST)) {
+            stmt.setString(1, conversationId);
+            try (ResultSet rs = stmt.executeQuery()) {
 
-            while (rs.next()) {
-                results.add(mapWishlistItem(rs));
+                while (rs.next()) {
+                    results.add(mapWishlistItem(rs));
+                }
             }
         } catch (SQLException e) {
             LOG.error("Error finding all wishlist items", e);
@@ -60,14 +80,14 @@ public class WishlistRepository {
         return results;
     }
 
-    public void deleteAll() {
-        String sql = "DELETE FROM wishlist_items";
+    public void deleteAll(String conversationId) {
+        String sql = "DELETE FROM wishlist_items WHERE conversation_id = ?";
 
         try (Connection conn = dataSource.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
-
+            stmt.setString(1, conversationId);
             int deleted = stmt.executeUpdate();
-            LOG.debug("Deleted {} wishlist items", deleted);
+            LOG.debug("Deleted {} wishlist items for conversation {}", deleted, conversationId);
         } catch (SQLException e) {
             LOG.error("Error deleting all wishlist items", e);
         }
@@ -77,7 +97,9 @@ public class WishlistRepository {
         return new WishlistItem(
             rs.getLong("id"),
             rs.getString("item_type"),
-            rs.getLong("item_id")
+            rs.getLong("item_id"),
+            rs.getString("item_name"),
+            rs.getString("item_detail")
         );
     }
 }

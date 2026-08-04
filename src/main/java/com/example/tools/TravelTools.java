@@ -11,9 +11,12 @@ import com.example.repository.SpatialSearchRepository;
 import com.example.repository.WishlistRepository;
 import com.example.service.EmbeddingService;
 import dev.langchain4j.agent.tool.Tool;
+import dev.langchain4j.agent.tool.ToolMemoryId;
 import io.micronaut.data.model.geo.Point;
 import io.micronaut.data.model.vector.FloatVector;
 import io.micronaut.data.model.vector.Vector;
+import io.opentelemetry.api.trace.Span;
+import io.opentelemetry.instrumentation.annotations.WithSpan;
 import jakarta.inject.Singleton;
 
 import java.util.List;
@@ -51,7 +54,9 @@ public class TravelTools {
     }
 
     @Tool("Search for Swiss destinations by preference when there is no location constraint. For 'in', 'near', 'around', or 'within km of' requests, use searchNearbyDestinations instead.")
+    @WithSpan("tool searchDestinations")
     public String searchDestinations(String query) {
+        markToolSpan("searchDestinations");
         Vector queryVector = embedding(query);
         List<DestinationEntity> results = destinationRepository.findTop5ByDescriptionEmbeddingNear(queryVector, MAX_COSINE_DISTANCE);
         if (results.isEmpty()) {
@@ -65,7 +70,9 @@ public class TravelTools {
     }
 
     @Tool("Search for Swiss destinations by preference near a location anchor. Supported anchors: Zermatt, Interlaken, Lucerne, Lausanne, St. Moritz, Lugano, Zurich. radiusKm defaults to 50.")
+    @WithSpan("tool searchNearbyDestinations")
     public String searchNearbyDestinations(String query, String nearDestinationName, Double radiusKm) {
+        markToolSpan("searchNearbyDestinations");
         Optional<Point> location = locationForDestination(nearDestinationName);
         if (location.isEmpty()) {
             return unsupportedLocation("nearby search", nearDestinationName);
@@ -90,21 +97,25 @@ public class TravelTools {
         return sb.toString();
     }
 
-    @Tool("Search for hotels when there is no location constraint. Optional filters: destinationId, maxPrice (CHF/night). For 'in', 'near', 'around', or 'within km of' requests, use searchNearbyHotels instead.")
+    @Tool("Search for hotels when there is no location constraint. Optional filters: destinationId, maxPrice (CHF/night); use null or 0 when an optional filter is not specified. For 'in', 'near', 'around', or 'within km of' requests, use searchNearbyHotels instead.")
+    @WithSpan("tool searchHotels")
     public String searchHotels(String query, Long destinationId, Double maxPrice) {
+        markToolSpan("searchHotels");
         Vector queryVector = embedding(query);
         List<HotelEntity> results;
-        if (destinationId != null && maxPrice != null) {
+        Long effectiveDestinationId = positiveOrNull(destinationId);
+        Double effectiveMaxPrice = positiveOrNull(maxPrice);
+        if (effectiveDestinationId != null && effectiveMaxPrice != null) {
             results = hotelRepository.findTop5ByDestinationIdAndPricePerNightLessThanEqualsAndDescriptionEmbeddingNear(
-                destinationId,
-                maxPrice,
+                effectiveDestinationId,
+                effectiveMaxPrice,
                 queryVector,
                 MAX_COSINE_DISTANCE
             );
-        } else if (destinationId != null) {
-            results = hotelRepository.findTop5ByDestinationIdAndDescriptionEmbeddingNear(destinationId, queryVector, MAX_COSINE_DISTANCE);
-        } else if (maxPrice != null) {
-            results = hotelRepository.findTop5ByPricePerNightLessThanEqualsAndDescriptionEmbeddingNear(maxPrice, queryVector, MAX_COSINE_DISTANCE);
+        } else if (effectiveDestinationId != null) {
+            results = hotelRepository.findTop5ByDestinationIdAndDescriptionEmbeddingNear(effectiveDestinationId, queryVector, MAX_COSINE_DISTANCE);
+        } else if (effectiveMaxPrice != null) {
+            results = hotelRepository.findTop5ByPricePerNightLessThanEqualsAndDescriptionEmbeddingNear(effectiveMaxPrice, queryVector, MAX_COSINE_DISTANCE);
         } else {
             results = hotelRepository.findTop5ByDescriptionEmbeddingNear(queryVector, MAX_COSINE_DISTANCE);
         }
@@ -118,8 +129,10 @@ public class TravelTools {
         return sb.toString();
     }
 
-    @Tool("Search for hotels by preference near a location anchor. Supported anchors: Zermatt, Interlaken, Lucerne, Lausanne, St. Moritz, Lugano, Zurich. Optional maxPrice in CHF/night. radiusKm defaults to 15.")
+    @Tool("Search for hotels by preference near a location anchor. Supported anchors: Zermatt, Interlaken, Lucerne, Lausanne, St. Moritz, Lugano, Zurich. Optional maxPrice in CHF/night; use null or 0 when no budget is specified. radiusKm defaults to 15.")
+    @WithSpan("tool searchNearbyHotels")
     public String searchNearbyHotels(String query, String nearDestinationName, Double radiusKm, Double maxPrice) {
+        markToolSpan("searchNearbyHotels");
         Optional<Point> location = locationForDestination(nearDestinationName);
         if (location.isEmpty()) {
             return unsupportedLocation("nearby hotel search", nearDestinationName);
@@ -132,7 +145,7 @@ public class TravelTools {
             point.x(),
             point.y(),
             radius,
-            maxPrice
+            positiveOrNull(maxPrice)
         );
 
         if (results.isEmpty()) {
@@ -152,7 +165,9 @@ public class TravelTools {
     }
 
     @Tool("Search for activities when there is no location constraint. Optional filter: destinationId. For 'in', 'near', 'around', or 'within km of' requests, use searchNearbyActivities instead.")
+    @WithSpan("tool searchActivities")
     public String searchActivities(String query, Long destinationId) {
+        markToolSpan("searchActivities");
         Vector queryVector = embedding(query);
         List<ActivityEntity> results = destinationId == null
             ? activityRepository.findTop5ByDescriptionEmbeddingNear(queryVector, MAX_COSINE_DISTANCE)
@@ -168,7 +183,9 @@ public class TravelTools {
     }
 
     @Tool("Search for activities by preference near a location anchor. Supported anchors: Zermatt, Interlaken, Lucerne, Lausanne, St. Moritz, Lugano, Zurich. radiusKm defaults to 40.")
+    @WithSpan("tool searchNearbyActivities")
     public String searchNearbyActivities(String query, String nearDestinationName, Double radiusKm) {
+        markToolSpan("searchNearbyActivities");
         Optional<Point> location = locationForDestination(nearDestinationName);
         if (location.isEmpty()) {
             return unsupportedLocation("nearby activity search", nearDestinationName);
@@ -199,8 +216,10 @@ public class TravelTools {
         return sb.toString();
     }
 
-    @Tool("Add an item to the wishlist. itemType: 'destination', 'hotel', or 'activity'. itemId: from search results.")
-    public String addToWishlist(String itemType, Long itemId) {
+    @Tool("Add a specific item to this conversation's wishlist only when the user explicitly asks to add, save, bookmark, or place that item on their wishlist. If the item is ambiguous, ask which one instead of calling this tool. itemType: 'destination', 'hotel', or 'activity'. itemId: from search results.")
+    @WithSpan("tool addToWishlist")
+    public String addToWishlist(@ToolMemoryId String conversationId, String itemType, Long itemId) {
+        markToolSpan("addToWishlist");
         String type = itemType.toLowerCase();
         String name = switch (type) {
             case "destination" -> {
@@ -220,13 +239,17 @@ public class TravelTools {
         if (name == null) {
             return "Error: " + itemType + " with ID " + itemId + " not found.";
         }
-        wishlistRepository.save(new WishlistItem(type, itemId));
+        if (!wishlistRepository.save(conversationId, new WishlistItem(type, itemId))) {
+            return "Error: could not save " + name + " to the wishlist.";
+        }
         return "Added to wishlist: " + name;
     }
 
-    @Tool("Get the user's wishlist with all saved destinations, hotels, and activities.")
-    public String getWishlist() {
-        List<WishlistItem> items = wishlistRepository.findAll();
+    @Tool("Get this conversation's wishlist with all saved destinations, hotels, and activities.")
+    @WithSpan("tool getWishlist")
+    public String getWishlist(@ToolMemoryId String conversationId) {
+        markToolSpan("getWishlist");
+        List<WishlistItem> items = wishlistRepository.findAll(conversationId);
         if (items.isEmpty()) {
             return "Your wishlist is empty.";
         }
@@ -299,5 +322,20 @@ public class TravelTools {
             return defaultRadiusKm;
         }
         return radiusKm;
+    }
+
+    private Long positiveOrNull(Long value) {
+        return value == null || value <= 0 ? null : value;
+    }
+
+    private Double positiveOrNull(Double value) {
+        return value == null || value <= 0 ? null : value;
+    }
+
+    private void markToolSpan(String toolName) {
+        Span.current()
+            .setAttribute("openinference.span.kind", "TOOL")
+            .setAttribute("tool.name", toolName)
+            .setAttribute("gen_ai.tool.name", toolName);
     }
 }

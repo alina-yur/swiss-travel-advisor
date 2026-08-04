@@ -1,0 +1,13 @@
+services:
+  phoenix:
+    image: arizephoenix/phoenix:version-17.5.0
+    ports:
+      - "6006:6006"
+      - "4317:4317"
+    environment:
+      PHOENIX_WORKING_DIR: /mnt/data
+    volumes:
+      - phoenix-data:/mnt/data
+
+volumes:
+  phoenix-data:

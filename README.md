@@ -9,7 +9,7 @@ Built with Micronaut 5, LangChain4j, Oracle AI Database, and GraalVM Native Imag
 
 ## How It Works
 
-When a user asks a question, the app embeds the query using OpenAI's `text-embedding-3-small` model, then uses Micronaut Data repositories to run Oracle AI Database vector similarity search. For location-aware requests, it combines that with Oracle Spatial radius filters over seeded Swiss destination coordinates. The LLM decides which tools to call (search, nearby search, wishlist, etc.), and LangChain4j handles execution and message routing.
+When a user asks a question, the app embeds the query using OpenAI's `text-embedding-3-small` model, then uses Micronaut Data repositories to run Oracle AI Database vector similarity search. For location-aware requests, it combines that with Oracle Spatial radius filters over seeded Swiss destination coordinates. The LLM decides which tools to call (search, nearby search, wishlist, etc.), and LangChain4j handles execution and message routing. A bounded chat history is stored in Oracle by conversation ID so follow-up requests retain their context across application restarts.
 
 Nearby search resolves location names from the seeded destination catalog, not an external geocoder. The current anchors are Zermatt, Interlaken, Lucerne, Lausanne, St. Moritz, Lugano, and Zurich.
 
@@ -22,26 +22,19 @@ On startup, Flyway runs database migrations and loads destinations, hotels, and 
 - Repositories — Micronaut Data JDBC repositories using Oracle vector `Near` queries and Oracle Spatial radius queries
 - `EmbeddingService` — generates embeddings via OpenAI
 - `DataInitializer` — populates embeddings on startup
+- `OracleChatMemoryStore` — persists each conversation's bounded message window as JSON in Oracle
 
 ## Quick Start
 
 ### 1. Configure Oracle Database
 
 By default, this project uses [Oracle Autonomous Database](https://www.oracle.com/autonomous-database/) via TLS connection.
-It now shares the same environment variable names as
-`/home/opc/demo-central/devoxx-greece/pet-vector-search`.
 
 Required environment variables:
 
 ```bash
 export ORACLE_JDBC_URL='<oracle-jdbc-url>'
 export DB_PASSWORD=
-```
-
-Optional environment variable:
-
-```bash
-export DB_USERNAME=ADMIN
 ```
 
 If you already use Micronaut-native datasource variables, these still override the
@@ -85,6 +78,11 @@ old local/dev path, start with:
 
 The app starts at `http://localhost:8080`.
 
+Open that URL in a browser for the chat interface. It keeps conversation IDs
+behind the scenes, lets you reopen previous journeys, and shows the selected
+conversation's wishlist in the sidebar. Wishlist items are saved only after an
+explicit user request. The JSON API remains available under `/api`.
+
 The native executable:
 - Has the size of 132 MB
 - Starts and connects to the database in 122 ms
@@ -98,11 +96,10 @@ http POST http://localhost:8080/api/chat message="recommend best ski resorts"
 http POST http://localhost:8080/api/chat message="find quiet lakeside hotels near Lucerne under 250 CHF"
 http POST http://localhost:8080/api/chat message="show scenic activities within 40 km of Interlaken"
 http POST http://localhost:8080/api/chat message="show best activities in Zurich"
-
-
-http POST http://localhost:8080/api/chat message="add Interlaken to my wishlist"
-http POST http://localhost:8080/api/chat message="retrieve my wishlist"
 ```
+
+Use the same `conversationId` for follow-up requests, including adding or
+retrieving items from that conversation's wishlist.
 
 Or with curl:
 
@@ -111,6 +108,59 @@ curl -X POST http://localhost:8080/api/chat \
   -H "Content-Type: application/json" \
   -d '{"message": "I want to visit a peaceful mountain resort"}'
 ```
+
+The JSON response contains both `conversationId` and `message`. Pass the same ID
+on a follow-up request:
+
+```bash
+curl -X POST http://localhost:8080/api/chat \
+  -H "Content-Type: application/json" \
+  -d '{
+    "conversationId": "<conversation-id-from-the-first-response>",
+    "message": "Which of those is the most affordable?"
+  }'
+```
+
+Omit `conversationId` to start a new conversation. Conversation IDs are UUIDs,
+and the most recent 20 messages in each conversation are retained.
+
+## Trace LLM Calls with Phoenix
+
+The optional `phoenix` environment traces each OpenAI chat call with
+OpenTelemetry and visualizes the complete request/tool/response sequence in
+[Arize Phoenix](https://phoenix.arize.com/).
+
+Start the local Phoenix UI and collector:
+
+```bash
+podman machine start
+podman-compose up -d phoenix
+```
+
+Then run the application with tracing enabled:
+
+```bash
+MICRONAUT_ENVIRONMENTS=phoenix ./mvnw mn:run
+```
+
+Send one of the example chat requests, then open
+[http://localhost:6006](http://localhost:6006). Select the
+`swiss-travel-advisor` project to inspect model latency, prompts, responses,
+dedicated tool spans, JDBC queries, errors, and token usage. The HTTP request,
+LLM calls, selected tools, and their database work appear together as one
+trace. Phoenix data persists in the `phoenix-data` Podman volume.
+
+The local profile captures prompt and response content so the trace is useful
+for debugging. Treat that content as sensitive. Disable capture while retaining
+latency, model, status, and token telemetry with:
+
+```bash
+AI_TRACING_INCLUDE_CONTENT=false \
+  MICRONAUT_ENVIRONMENTS=phoenix ./mvnw mn:run
+```
+
+To send traces to another OTLP collector, set `OTEL_EXPORTER_OTLP_ENDPOINT` and,
+if needed, `OTEL_EXPORTER_OTLP_PROTOCOL`.
 
 ## Location-Aware Search
 
@@ -136,3 +186,4 @@ show best activities in Zurich
 
 - Add a JSON Trip Plan API using Oracle JSON Relational Duality Views.
 - Add an OpenTelemetry demo: keep Hikari, add HTTP + JDBC tracing, custom `TravelTools` spans, native-image verification, and Jaeger/OTLP docs.
+- Add embedding-model spans and complete an end-to-end Phoenix UI verification.

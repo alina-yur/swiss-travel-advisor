@@ -29,6 +29,45 @@
       "allDeclaredConstructors": true
     },
     {
+      "type": "org.flywaydb.core.internal.exception.sqlExceptions.FlywaySqlNoIntegratedAuthException",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": ["java.sql.SQLException", "javax.sql.DataSource"]
+        },
+        {
+          "name": "isFlywaySpecificVersionOf",
+          "parameterTypes": ["java.sql.SQLException"]
+        }
+      ]
+    },
+    {
+      "type": "org.flywaydb.core.internal.exception.sqlExceptions.FlywaySqlNoDriversForInteractiveAuthException",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": ["java.sql.SQLException", "javax.sql.DataSource"]
+        },
+        {
+          "name": "isFlywaySpecificVersionOf",
+          "parameterTypes": ["java.sql.SQLException"]
+        }
+      ]
+    },
+    {
+      "type": "org.flywaydb.core.internal.exception.sqlExceptions.FlywaySqlServerUntrustedCertificateSqlException",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": ["java.sql.SQLException", "javax.sql.DataSource"]
+        },
+        {
+          "name": "isFlywaySpecificVersionOf",
+          "parameterTypes": ["java.sql.SQLException"]
+        }
+      ]
+    },
+    {
       "type": "com.zaxxer.hikari.util.ConcurrentBag$IConcurrentBagEntry[]"
     },
     {
@@ -38,6 +77,116 @@
     {
       "type": "dev.langchain4j.model.openai.internal.embedding.OpenAiEmbeddingDeserializer",
       "allDeclaredConstructors": true
+    },
+    {
+      "type": "dev.langchain4j.data.message.SystemMessage",
+      "allDeclaredConstructors": true,
+      "allDeclaredMethods": true,
+      "allDeclaredFields": true
+    },
+    {
+      "type": "dev.langchain4j.data.message.UserMessage",
+      "allDeclaredConstructors": true,
+      "allDeclaredMethods": true,
+      "allDeclaredFields": true
+    },
+    {
+      "type": "dev.langchain4j.data.message.AiMessage",
+      "allDeclaredConstructors": true,
+      "allDeclaredMethods": true,
+      "allDeclaredFields": true
+    },
+    {
+      "type": "dev.langchain4j.data.message.ToolExecutionResultMessage",
+      "allDeclaredConstructors": true,
+      "allDeclaredMethods": true,
+      "allDeclaredFields": true
+    },
+    {
+      "type": "dev.langchain4j.data.message.TextContent",
+      "allDeclaredConstructors": true,
+      "allDeclaredMethods": true,
+      "allDeclaredFields": true
+    },
+    {
+      "type": "dev.langchain4j.agent.tool.ToolExecutionRequest",
+      "allDeclaredConstructors": true,
+      "allDeclaredMethods": true,
+      "allDeclaredFields": true
+    },
+    {
+      "type": "dev.langchain4j.data.message.UserMessage$Builder",
+      "allDeclaredConstructors": true,
+      "allDeclaredMethods": true,
+      "allDeclaredFields": true
+    },
+    {
+      "type": "dev.langchain4j.data.message.AiMessage$Builder",
+      "allDeclaredConstructors": true,
+      "allDeclaredMethods": true,
+      "allDeclaredFields": true
+    },
+    {
+      "type": "dev.langchain4j.data.message.ToolExecutionResultMessage$Builder",
+      "allDeclaredConstructors": true,
+      "allDeclaredMethods": true,
+      "allDeclaredFields": true
+    },
+    {
+      "type": "dev.langchain4j.agent.tool.ToolExecutionRequest$Builder",
+      "allDeclaredConstructors": true,
+      "allDeclaredMethods": true,
+      "allDeclaredFields": true
+    },
+    {
+      "type": "dev.langchain4j.data.message.ChatMessageType",
+      "allDeclaredMethods": true,
+      "allDeclaredFields": true
+    },
+    {
+      "type": "dev.langchain4j.data.message.ContentType",
+      "allDeclaredMethods": true,
+      "allDeclaredFields": true
+    },
+    {
+      "type": "dev.langchain4j.data.message.JacksonChatMessageJsonCodec$ChatMessageMixin",
+      "allDeclaredConstructors": true,
+      "allDeclaredMethods": true
+    },
+    {
+      "type": "dev.langchain4j.data.message.JacksonChatMessageJsonCodec$SystemMessageMixin",
+      "allDeclaredConstructors": true,
+      "allDeclaredMethods": true
+    },
+    {
+      "type": "dev.langchain4j.data.message.JacksonChatMessageJsonCodec$UserMessageMixin",
+      "allDeclaredConstructors": true,
+      "allDeclaredMethods": true
+    },
+    {
+      "type": "dev.langchain4j.data.message.JacksonChatMessageJsonCodec$AiMessageMixin",
+      "allDeclaredConstructors": true,
+      "allDeclaredMethods": true
+    },
+    {
+      "type": "dev.langchain4j.data.message.JacksonChatMessageJsonCodec$ToolExecutionRequestMixin",
+      "allDeclaredConstructors": true,
+      "allDeclaredMethods": true
+    },
+    {
+      "type": "dev.langchain4j.data.message.JacksonChatMessageJsonCodec$ToolExecutionResultMessageMixin",
+      "allDeclaredConstructors": true,
+      "allDeclaredMethods": true
+    },
+    {
+      "type": "dev.langchain4j.data.message.JacksonChatMessageJsonCodec$ContentMixin",
+      "allDeclaredConstructors": true,
+      "allDeclaredMethods": true
+    },
+    {
+      "type": "dev.langchain4j.data.message.JacksonChatMessageJsonCodec$TextContentMixin",
+      "allDeclaredConstructors": true,
+      "allDeclaredMethods": true
     },
     {
       "type": { "pattern": "dev.langchain4j.model.openai.internal.embedding.*" },

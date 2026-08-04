@@ -10,6 +10,7 @@ Built with Micronaut 5, LangChain4j, Oracle AI Database, and GraalVM Native Imag
 ## How It Works
 
 When a user asks a question, the app embeds the query using OpenAI's `text-embedding-3-small` model, then uses Micronaut Data repositories to run Oracle AI Database vector similarity search. For location-aware requests, it combines that with Oracle Spatial radius filters over seeded Swiss destination coordinates. The LLM decides which tools to call (search, nearby search, wishlist, etc.), and LangChain4j handles execution and message routing. A bounded chat history is stored in Oracle by conversation ID so follow-up requests retain their context across application restarts.
+When a user asks a question, the app embeds the query using OpenAI's `text-embedding-3-small` model, then uses Micronaut Data repositories to run Oracle AI Database vector similarity search. For location-aware requests, it combines that with Oracle Spatial radius filters over seeded Swiss destination coordinates. The LLM decides which tools to call (search, nearby search, wishlist, etc.), and LangChain4j handles execution and message routing. A bounded chat history is stored in Oracle by conversation ID so follow-up requests retain their context across application restarts.
 
 Nearby search resolves location names from the seeded destination catalog, not an external geocoder. The current anchors are Zermatt, Interlaken, Lucerne, Lausanne, St. Moritz, Lugano, and Zurich.
 
@@ -22,6 +23,7 @@ On startup, Flyway runs database migrations and loads destinations, hotels, and 
 - Repositories — Micronaut Data JDBC repositories using Oracle vector `Near` queries and Oracle Spatial radius queries
 - `EmbeddingService` — generates embeddings via OpenAI
 - `DataInitializer` — populates embeddings on startup
+- `OracleChatMemoryStore` — persists each conversation's bounded message window as JSON in Oracle
 - `OracleChatMemoryStore` — persists each conversation's bounded message window as JSON in Oracle
 
 ## Quick Start
@@ -83,6 +85,11 @@ behind the scenes, lets you reopen previous journeys, and shows the selected
 conversation's wishlist in the sidebar. Wishlist items are saved only after an
 explicit user request. The JSON API remains available under `/api`.
 
+Open that URL in a browser for the chat interface. It keeps conversation IDs
+behind the scenes, lets you reopen previous journeys, and shows the selected
+conversation's wishlist in the sidebar. Wishlist items are saved only after an
+explicit user request. The JSON API remains available under `/api`.
+
 The native executable:
 - Has the size of 132 MB
 - Starts and connects to the database in 122 ms
@@ -97,6 +104,9 @@ http POST http://localhost:8080/api/chat message="find quiet lakeside hotels nea
 http POST http://localhost:8080/api/chat message="show scenic activities within 40 km of Interlaken"
 http POST http://localhost:8080/api/chat message="show best activities in Zurich"
 ```
+
+Use the same `conversationId` for follow-up requests, including adding or
+retrieving items from that conversation's wishlist.
 
 Use the same `conversationId` for follow-up requests, including adding or
 retrieving items from that conversation's wishlist.
@@ -161,6 +171,21 @@ AI_TRACING_INCLUDE_CONTENT=false \
 
 To send traces to another OTLP collector, set `OTEL_EXPORTER_OTLP_ENDPOINT` and,
 if needed, `OTEL_EXPORTER_OTLP_PROTOCOL`.
+
+The JSON response contains both `conversationId` and `message`. Pass the same ID
+on a follow-up request:
+
+```bash
+curl -X POST http://localhost:8080/api/chat \
+  -H "Content-Type: application/json" \
+  -d '{
+    "conversationId": "<conversation-id-from-the-first-response>",
+    "message": "Which of those is the most affordable?"
+  }'
+```
+
+Omit `conversationId` to start a new conversation. Conversation IDs are UUIDs,
+and the most recent 20 messages in each conversation are retained.
 
 ## Location-Aware Search
 

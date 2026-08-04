@@ -102,20 +102,18 @@ public class TravelTools {
     public String searchHotels(String query, Long destinationId, Double maxPrice) {
         markToolSpan("searchHotels");
         Vector queryVector = embedding(query);
-        List<HotelEntity> results;
         Long effectiveDestinationId = positiveOrNull(destinationId);
         Double effectiveMaxPrice = positiveOrNull(maxPrice);
+        List<HotelEntity> results;
         if (effectiveDestinationId != null && effectiveMaxPrice != null) {
             results = hotelRepository.findTop5ByDestinationIdAndPricePerNightLessThanEqualsAndDescriptionEmbeddingNear(
-                effectiveDestinationId,
-                effectiveMaxPrice,
-                queryVector,
-                MAX_COSINE_DISTANCE
-            );
+                effectiveDestinationId, effectiveMaxPrice, queryVector, MAX_COSINE_DISTANCE);
         } else if (effectiveDestinationId != null) {
-            results = hotelRepository.findTop5ByDestinationIdAndDescriptionEmbeddingNear(effectiveDestinationId, queryVector, MAX_COSINE_DISTANCE);
+            results = hotelRepository.findTop5ByDestinationIdAndDescriptionEmbeddingNear(
+                effectiveDestinationId, queryVector, MAX_COSINE_DISTANCE);
         } else if (effectiveMaxPrice != null) {
-            results = hotelRepository.findTop5ByPricePerNightLessThanEqualsAndDescriptionEmbeddingNear(effectiveMaxPrice, queryVector, MAX_COSINE_DISTANCE);
+            results = hotelRepository.findTop5ByPricePerNightLessThanEqualsAndDescriptionEmbeddingNear(
+                effectiveMaxPrice, queryVector, MAX_COSINE_DISTANCE);
         } else {
             results = hotelRepository.findTop5ByDescriptionEmbeddingNear(queryVector, MAX_COSINE_DISTANCE);
         }
@@ -169,9 +167,10 @@ public class TravelTools {
     public String searchActivities(String query, Long destinationId) {
         markToolSpan("searchActivities");
         Vector queryVector = embedding(query);
-        List<ActivityEntity> results = destinationId == null
+        Long effectiveDestinationId = positiveOrNull(destinationId);
+        List<ActivityEntity> results = effectiveDestinationId == null
             ? activityRepository.findTop5ByDescriptionEmbeddingNear(queryVector, MAX_COSINE_DISTANCE)
-            : activityRepository.findTop5ByDestinationIdAndDescriptionEmbeddingNear(destinationId, queryVector, MAX_COSINE_DISTANCE);
+            : activityRepository.findTop5ByDestinationIdAndDescriptionEmbeddingNear(effectiveDestinationId, queryVector, MAX_COSINE_DISTANCE);
         if (results.isEmpty()) {
             return "No activities found matching: " + query;
         }

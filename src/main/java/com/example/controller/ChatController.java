@@ -1,6 +1,7 @@
 package com.example.controller;
 
 import com.example.memory.OracleChatMemoryStore;
+import com.example.observability.AiObservability;
 import com.example.service.SwissTravelAssistant;
 import io.micronaut.http.MediaType;
 import io.micronaut.http.HttpStatus;
@@ -23,11 +24,16 @@ public class ChatController {
 
     private final SwissTravelAssistant assistant;
     private final OracleChatMemoryStore chatMemoryStore;
+    private final AiObservability observability;
     private final Object[] conversationLocks = new Object[LOCK_STRIPES];
 
-    public ChatController(SwissTravelAssistant assistant, OracleChatMemoryStore chatMemoryStore) {
+    public ChatController(
+            SwissTravelAssistant assistant,
+            OracleChatMemoryStore chatMemoryStore,
+            AiObservability observability) {
         this.assistant = assistant;
         this.chatMemoryStore = chatMemoryStore;
+        this.observability = observability;
         for (int i = 0; i < conversationLocks.length; i++) {
             conversationLocks[i] = new Object();
         }
@@ -75,7 +81,11 @@ public class ChatController {
         String conversationId = normalizeConversationId(requestedConversationId);
         Object lock = conversationLocks[Math.floorMod(conversationId.hashCode(), conversationLocks.length)];
         synchronized (lock) {
-            return new ChatReply(conversationId, assistant.chat(conversationId, message));
+            String reply = observability.traceAgentTurn(
+                    conversationId,
+                    message,
+                    () -> assistant.chat(conversationId, message));
+            return new ChatReply(conversationId, reply);
         }
     }
 

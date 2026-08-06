@@ -6,7 +6,7 @@ import dev.langchain4j.service.SystemMessage;
 import dev.langchain4j.service.UserMessage;
 import io.micronaut.langchain4j.annotation.AiService;
 
-@AiService(tools = TravelTools.class)
+@AiService(tools = TravelTools.class, customizer = SwissTravelAssistantTracingCustomizer.class)
 public interface SwissTravelAssistant {
 
     @SystemMessage("""

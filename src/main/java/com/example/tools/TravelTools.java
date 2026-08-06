@@ -4,6 +4,7 @@ import com.example.entity.ActivityEntity;
 import com.example.entity.DestinationEntity;
 import com.example.entity.HotelEntity;
 import com.example.model.WishlistItem;
+import com.example.observability.AiObservability;
 import com.example.repository.ActivityRepository;
 import com.example.repository.DestinationRepository;
 import com.example.repository.HotelRepository;
@@ -15,12 +16,12 @@ import dev.langchain4j.agent.tool.ToolMemoryId;
 import io.micronaut.data.model.geo.Point;
 import io.micronaut.data.model.vector.FloatVector;
 import io.micronaut.data.model.vector.Vector;
-import io.opentelemetry.api.trace.Span;
-import io.opentelemetry.instrumentation.annotations.WithSpan;
 import jakarta.inject.Singleton;
 
 import java.util.List;
+import java.util.LinkedHashMap;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
 
 @Singleton
@@ -36,6 +37,7 @@ public class TravelTools {
     private final ActivityRepository activityRepository;
     private final SpatialSearchRepository spatialSearchRepository;
     private final WishlistRepository wishlistRepository;
+    private final AiObservability observability;
 
     public TravelTools(
         EmbeddingService embeddingService,
@@ -43,7 +45,8 @@ public class TravelTools {
         HotelRepository hotelRepository,
         ActivityRepository activityRepository,
         SpatialSearchRepository spatialSearchRepository,
-        WishlistRepository wishlistRepository
+        WishlistRepository wishlistRepository,
+        AiObservability observability
     ) {
         this.embeddingService = embeddingService;
         this.destinationRepository = destinationRepository;
@@ -51,14 +54,21 @@ public class TravelTools {
         this.activityRepository = activityRepository;
         this.spatialSearchRepository = spatialSearchRepository;
         this.wishlistRepository = wishlistRepository;
+        this.observability = observability;
     }
 
     @Tool("Search for Swiss destinations by preference when there is no location constraint. For 'in', 'near', 'around', or 'within km of' requests, use searchNearbyDestinations instead.")
-    @WithSpan("tool searchDestinations")
     public String searchDestinations(String query) {
-        markToolSpan("searchDestinations");
+        return observability.traceTool("searchDestinations", parameters("query", query),
+                () -> doSearchDestinations(query));
+    }
+
+    private String doSearchDestinations(String query) {
         Vector queryVector = embedding(query);
-        List<DestinationEntity> results = destinationRepository.findTop5ByDescriptionEmbeddingNear(queryVector, MAX_COSINE_DISTANCE);
+        List<DestinationEntity> results = observability.traceRetriever(
+                "Oracle destination vector search",
+                parameters("entity.type", "destination", "max_distance", MAX_COSINE_DISTANCE),
+                () -> destinationRepository.findTop5ByDescriptionEmbeddingNear(queryVector, MAX_COSINE_DISTANCE));
         if (results.isEmpty()) {
             return "No destinations found matching: " + query;
         }
@@ -70,9 +80,13 @@ public class TravelTools {
     }
 
     @Tool("Search for Swiss destinations by preference near a location anchor. Supported anchors: Zermatt, Interlaken, Lucerne, Lausanne, St. Moritz, Lugano, Zurich. radiusKm defaults to 50.")
-    @WithSpan("tool searchNearbyDestinations")
     public String searchNearbyDestinations(String query, String nearDestinationName, Double radiusKm) {
-        markToolSpan("searchNearbyDestinations");
+        return observability.traceTool("searchNearbyDestinations", parameters(
+                        "query", query, "nearDestinationName", nearDestinationName, "radiusKm", radiusKm),
+                () -> doSearchNearbyDestinations(query, nearDestinationName, radiusKm));
+    }
+
+    private String doSearchNearbyDestinations(String query, String nearDestinationName, Double radiusKm) {
         Optional<Point> location = locationForDestination(nearDestinationName);
         if (location.isEmpty()) {
             return unsupportedLocation("nearby search", nearDestinationName);
@@ -80,12 +94,12 @@ public class TravelTools {
 
         double radius = radiusOrDefault(radiusKm, DEFAULT_DESTINATION_RADIUS_KM);
         Point point = location.get();
-        List<DestinationEntity> results = spatialSearchRepository.searchDestinationsByVectorNear(
-            embedding(query),
-            point.x(),
-            point.y(),
-            radius
-        );
+        Vector queryVector = embedding(query);
+        List<DestinationEntity> results = observability.traceRetriever(
+                "Oracle destination vector + spatial search",
+                parameters("entity.type", "destination", "location", nearDestinationName, "radius_km", radius),
+                () -> spatialSearchRepository.searchDestinationsByVectorNear(
+                        queryVector, point.x(), point.y(), radius));
 
         if (results.isEmpty()) {
             return "No destinations found within " + radius + " km of " + nearDestinationName + " matching: " + query;
@@ -98,25 +112,34 @@ public class TravelTools {
     }
 
     @Tool("Search for hotels when there is no location constraint. Optional filters: destinationId, maxPrice (CHF/night); use null or 0 when an optional filter is not specified. For 'in', 'near', 'around', or 'within km of' requests, use searchNearbyHotels instead.")
-    @WithSpan("tool searchHotels")
     public String searchHotels(String query, Long destinationId, Double maxPrice) {
-        markToolSpan("searchHotels");
+        return observability.traceTool("searchHotels", parameters(
+                        "query", query, "destinationId", destinationId, "maxPrice", maxPrice),
+                () -> doSearchHotels(query, destinationId, maxPrice));
+    }
+
+    private String doSearchHotels(String query, Long destinationId, Double maxPrice) {
         Vector queryVector = embedding(query);
         Long effectiveDestinationId = positiveOrNull(destinationId);
         Double effectiveMaxPrice = positiveOrNull(maxPrice);
         List<HotelEntity> results;
-        if (effectiveDestinationId != null && effectiveMaxPrice != null) {
-            results = hotelRepository.findTop5ByDestinationIdAndPricePerNightLessThanEqualsAndDescriptionEmbeddingNear(
-                effectiveDestinationId, effectiveMaxPrice, queryVector, MAX_COSINE_DISTANCE);
-        } else if (effectiveDestinationId != null) {
-            results = hotelRepository.findTop5ByDestinationIdAndDescriptionEmbeddingNear(
-                effectiveDestinationId, queryVector, MAX_COSINE_DISTANCE);
-        } else if (effectiveMaxPrice != null) {
-            results = hotelRepository.findTop5ByPricePerNightLessThanEqualsAndDescriptionEmbeddingNear(
-                effectiveMaxPrice, queryVector, MAX_COSINE_DISTANCE);
-        } else {
-            results = hotelRepository.findTop5ByDescriptionEmbeddingNear(queryVector, MAX_COSINE_DISTANCE);
-        }
+        results = observability.traceRetriever(
+                "Oracle hotel vector search",
+                parameters("entity.type", "hotel", "destination_id", effectiveDestinationId,
+                        "max_price_chf", effectiveMaxPrice, "max_distance", MAX_COSINE_DISTANCE),
+                () -> {
+                    if (effectiveDestinationId != null && effectiveMaxPrice != null) {
+                        return hotelRepository.findTop5ByDestinationIdAndPricePerNightLessThanEqualsAndDescriptionEmbeddingNear(
+                                effectiveDestinationId, effectiveMaxPrice, queryVector, MAX_COSINE_DISTANCE);
+                    } else if (effectiveDestinationId != null) {
+                        return hotelRepository.findTop5ByDestinationIdAndDescriptionEmbeddingNear(
+                                effectiveDestinationId, queryVector, MAX_COSINE_DISTANCE);
+                    } else if (effectiveMaxPrice != null) {
+                        return hotelRepository.findTop5ByPricePerNightLessThanEqualsAndDescriptionEmbeddingNear(
+                                effectiveMaxPrice, queryVector, MAX_COSINE_DISTANCE);
+                    }
+                    return hotelRepository.findTop5ByDescriptionEmbeddingNear(queryVector, MAX_COSINE_DISTANCE);
+                });
         if (results.isEmpty()) {
             return "No hotels found matching: " + query;
         }
@@ -128,9 +151,14 @@ public class TravelTools {
     }
 
     @Tool("Search for hotels by preference near a location anchor. Supported anchors: Zermatt, Interlaken, Lucerne, Lausanne, St. Moritz, Lugano, Zurich. Optional maxPrice in CHF/night; use null or 0 when no budget is specified. radiusKm defaults to 15.")
-    @WithSpan("tool searchNearbyHotels")
     public String searchNearbyHotels(String query, String nearDestinationName, Double radiusKm, Double maxPrice) {
-        markToolSpan("searchNearbyHotels");
+        return observability.traceTool("searchNearbyHotels", parameters(
+                        "query", query, "nearDestinationName", nearDestinationName,
+                        "radiusKm", radiusKm, "maxPrice", maxPrice),
+                () -> doSearchNearbyHotels(query, nearDestinationName, radiusKm, maxPrice));
+    }
+
+    private String doSearchNearbyHotels(String query, String nearDestinationName, Double radiusKm, Double maxPrice) {
         Optional<Point> location = locationForDestination(nearDestinationName);
         if (location.isEmpty()) {
             return unsupportedLocation("nearby hotel search", nearDestinationName);
@@ -138,13 +166,14 @@ public class TravelTools {
 
         double radius = radiusOrDefault(radiusKm, DEFAULT_HOTEL_RADIUS_KM);
         Point point = location.get();
-        List<HotelEntity> results = spatialSearchRepository.searchHotelsByVectorNear(
-            embedding(query),
-            point.x(),
-            point.y(),
-            radius,
-            positiveOrNull(maxPrice)
-        );
+        Vector queryVector = embedding(query);
+        Double effectiveMaxPrice = positiveOrNull(maxPrice);
+        List<HotelEntity> results = observability.traceRetriever(
+                "Oracle hotel vector + spatial search",
+                parameters("entity.type", "hotel", "location", nearDestinationName,
+                        "radius_km", radius, "max_price_chf", effectiveMaxPrice),
+                () -> spatialSearchRepository.searchHotelsByVectorNear(
+                        queryVector, point.x(), point.y(), radius, effectiveMaxPrice));
 
         if (results.isEmpty()) {
             return "No hotels found within " + radius + " km of " + nearDestinationName + " matching: " + query;
@@ -163,14 +192,23 @@ public class TravelTools {
     }
 
     @Tool("Search for activities when there is no location constraint. Optional filter: destinationId. For 'in', 'near', 'around', or 'within km of' requests, use searchNearbyActivities instead.")
-    @WithSpan("tool searchActivities")
     public String searchActivities(String query, Long destinationId) {
-        markToolSpan("searchActivities");
+        return observability.traceTool("searchActivities", parameters(
+                        "query", query, "destinationId", destinationId),
+                () -> doSearchActivities(query, destinationId));
+    }
+
+    private String doSearchActivities(String query, Long destinationId) {
         Vector queryVector = embedding(query);
         Long effectiveDestinationId = positiveOrNull(destinationId);
-        List<ActivityEntity> results = effectiveDestinationId == null
-            ? activityRepository.findTop5ByDescriptionEmbeddingNear(queryVector, MAX_COSINE_DISTANCE)
-            : activityRepository.findTop5ByDestinationIdAndDescriptionEmbeddingNear(effectiveDestinationId, queryVector, MAX_COSINE_DISTANCE);
+        List<ActivityEntity> results = observability.traceRetriever(
+                "Oracle activity vector search",
+                parameters("entity.type", "activity", "destination_id", effectiveDestinationId,
+                        "max_distance", MAX_COSINE_DISTANCE),
+                () -> effectiveDestinationId == null
+                        ? activityRepository.findTop5ByDescriptionEmbeddingNear(queryVector, MAX_COSINE_DISTANCE)
+                        : activityRepository.findTop5ByDestinationIdAndDescriptionEmbeddingNear(
+                                effectiveDestinationId, queryVector, MAX_COSINE_DISTANCE));
         if (results.isEmpty()) {
             return "No activities found matching: " + query;
         }
@@ -182,9 +220,13 @@ public class TravelTools {
     }
 
     @Tool("Search for activities by preference near a location anchor. Supported anchors: Zermatt, Interlaken, Lucerne, Lausanne, St. Moritz, Lugano, Zurich. radiusKm defaults to 40.")
-    @WithSpan("tool searchNearbyActivities")
     public String searchNearbyActivities(String query, String nearDestinationName, Double radiusKm) {
-        markToolSpan("searchNearbyActivities");
+        return observability.traceTool("searchNearbyActivities", parameters(
+                        "query", query, "nearDestinationName", nearDestinationName, "radiusKm", radiusKm),
+                () -> doSearchNearbyActivities(query, nearDestinationName, radiusKm));
+    }
+
+    private String doSearchNearbyActivities(String query, String nearDestinationName, Double radiusKm) {
         Optional<Point> location = locationForDestination(nearDestinationName);
         if (location.isEmpty()) {
             return unsupportedLocation("nearby activity search", nearDestinationName);
@@ -192,12 +234,12 @@ public class TravelTools {
 
         double radius = radiusOrDefault(radiusKm, DEFAULT_ACTIVITY_RADIUS_KM);
         Point point = location.get();
-        List<ActivityEntity> results = spatialSearchRepository.searchActivitiesByVectorNear(
-            embedding(query),
-            point.x(),
-            point.y(),
-            radius
-        );
+        Vector queryVector = embedding(query);
+        List<ActivityEntity> results = observability.traceRetriever(
+                "Oracle activity vector + spatial search",
+                parameters("entity.type", "activity", "location", nearDestinationName, "radius_km", radius),
+                () -> spatialSearchRepository.searchActivitiesByVectorNear(
+                        queryVector, point.x(), point.y(), radius));
 
         if (results.isEmpty()) {
             return "No activities found within " + radius + " km of " + nearDestinationName + " matching: " + query;
@@ -216,9 +258,13 @@ public class TravelTools {
     }
 
     @Tool("Add a specific item to this conversation's wishlist only when the user explicitly asks to add, save, bookmark, or place that item on their wishlist. If the item is ambiguous, ask which one instead of calling this tool. itemType: 'destination', 'hotel', or 'activity'. itemId: from search results.")
-    @WithSpan("tool addToWishlist")
     public String addToWishlist(@ToolMemoryId String conversationId, String itemType, Long itemId) {
-        markToolSpan("addToWishlist");
+        return observability.traceTool("addToWishlist", parameters(
+                        "conversationId", conversationId, "itemType", itemType, "itemId", itemId),
+                () -> doAddToWishlist(conversationId, itemType, itemId));
+    }
+
+    private String doAddToWishlist(String conversationId, String itemType, Long itemId) {
         String type = itemType.toLowerCase();
         String name = switch (type) {
             case "destination" -> {
@@ -245,9 +291,12 @@ public class TravelTools {
     }
 
     @Tool("Get this conversation's wishlist with all saved destinations, hotels, and activities.")
-    @WithSpan("tool getWishlist")
     public String getWishlist(@ToolMemoryId String conversationId) {
-        markToolSpan("getWishlist");
+        return observability.traceTool("getWishlist", parameters("conversationId", conversationId),
+                () -> doGetWishlist(conversationId));
+    }
+
+    private String doGetWishlist(String conversationId) {
         List<WishlistItem> items = wishlistRepository.findAll(conversationId);
         if (items.isEmpty()) {
             return "Your wishlist is empty.";
@@ -331,10 +380,14 @@ public class TravelTools {
         return value == null || value <= 0 ? null : value;
     }
 
-    private void markToolSpan(String toolName) {
-        Span.current()
-            .setAttribute("openinference.span.kind", "TOOL")
-            .setAttribute("tool.name", toolName)
-            .setAttribute("gen_ai.tool.name", toolName);
+    private Map<String, Object> parameters(Object... namesAndValues) {
+        Map<String, Object> parameters = new LinkedHashMap<>();
+        for (int i = 0; i < namesAndValues.length; i += 2) {
+            if (namesAndValues[i + 1] != null) {
+                parameters.put(namesAndValues[i].toString(), namesAndValues[i + 1]);
+            }
+        }
+        return parameters;
     }
+
 }

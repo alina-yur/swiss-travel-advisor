@@ -2,6 +2,7 @@ package com.example.tools;
 
 import com.example.entity.DestinationEntity;
 import com.example.entity.HotelEntity;
+import com.example.observability.AiObservability;
 import com.example.repository.ActivityRepository;
 import com.example.repository.DestinationRepository;
 import com.example.repository.HotelRepository;
@@ -15,11 +16,14 @@ import org.junit.jupiter.api.Test;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.function.Supplier;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.ArgumentMatchers.anyMap;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -39,6 +43,17 @@ class TravelToolsTest {
         spatialSearchRepository = mock(SpatialSearchRepository.class);
 
         when(embeddingService.generateEmbedding(any())).thenReturn(new float[]{1.0f});
+        AiObservability observability = mock(AiObservability.class);
+        when(observability.traceTool(anyString(), anyMap(), any())).thenAnswer(invocation -> {
+            @SuppressWarnings("unchecked")
+            Supplier<String> operation = invocation.getArgument(2);
+            return operation.get();
+        });
+        when(observability.traceRetriever(anyString(), anyMap(), any())).thenAnswer(invocation -> {
+            @SuppressWarnings("unchecked")
+            Supplier<List<?>> operation = invocation.getArgument(2);
+            return operation.get();
+        });
 
         tools = new TravelTools(
             embeddingService,
@@ -46,7 +61,8 @@ class TravelToolsTest {
             hotelRepository,
             mock(ActivityRepository.class),
             spatialSearchRepository,
-            mock(WishlistRepository.class)
+            mock(WishlistRepository.class),
+            observability
         );
     }
 

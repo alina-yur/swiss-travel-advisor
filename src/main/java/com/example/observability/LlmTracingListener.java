@@ -34,11 +34,14 @@ public final class LlmTracingListener implements ChatModelListener {
 
     private final Tracer tracer;
     private final boolean includeContent;
+    private final AiObservability observability;
 
     public LlmTracingListener(
             OpenTelemetry openTelemetry,
+            AiObservability observability,
             @Value("${app.ai.tracing.include-content:false}") boolean includeContent) {
         this.tracer = openTelemetry.getTracer("com.example.swiss-travel-advisor.llm");
+        this.observability = observability;
         this.includeContent = includeContent;
     }
 
@@ -54,6 +57,11 @@ public final class LlmTracingListener implements ChatModelListener {
                 .setAttribute("gen_ai.request.model", model)
                 .setAttribute("server.address", "api.openai.com")
                 .startSpan();
+
+        String sessionId = observability.currentSessionId();
+        if (sessionId != null) {
+            span.setAttribute("session.id", sessionId);
+        }
 
         setIfPresent(span, "gen_ai.request.temperature", request.temperature());
         setIfPresent(span, "gen_ai.request.top_p", request.topP());

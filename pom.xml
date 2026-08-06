@@ -57,11 +57,6 @@
       <scope>compile</scope>
     </dependency>
     <dependency>
-      <groupId>io.micronaut.tracing</groupId>
-      <artifactId>micronaut-tracing-opentelemetry-annotation</artifactId>
-      <scope>compile</scope>
-    </dependency>
-    <dependency>
       <groupId>io.opentelemetry</groupId>
       <artifactId>opentelemetry-exporter-otlp</artifactId>
       <scope>runtime</scope>
@@ -169,11 +164,6 @@
               <groupId>io.micronaut.data</groupId>
               <artifactId>micronaut-data-processor</artifactId>
               <version>${micronaut.data.version}</version>
-            </path>
-            <path>
-              <groupId>io.micronaut.tracing</groupId>
-              <artifactId>micronaut-tracing-opentelemetry-annotation</artifactId>
-              <version>${micronaut.tracing.version}</version>
             </path>
           </annotationProcessorPaths>
           <compilerArgs>

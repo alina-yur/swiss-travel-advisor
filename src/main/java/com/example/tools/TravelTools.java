@@ -4,6 +4,7 @@ import com.example.entity.ActivityEntity;
 import com.example.entity.DestinationEntity;
 import com.example.entity.HotelEntity;
 import com.example.model.WishlistItem;
+import com.example.model.DestinationSearchResult;
 import com.example.observability.AiObservability;
 import com.example.repository.ActivityRepository;
 import com.example.repository.DestinationRepository;
@@ -95,18 +96,20 @@ public class TravelTools {
         double radius = radiusOrDefault(radiusKm, DEFAULT_DESTINATION_RADIUS_KM);
         Point point = location.get();
         Vector queryVector = embedding(query);
-        List<DestinationEntity> results = observability.traceRetriever(
+        List<DestinationSearchResult> results = observability.traceRetriever(
                 "Oracle destination vector + spatial search",
                 parameters("entity.type", "destination", "location", nearDestinationName, "radius_km", radius),
-                () -> spatialSearchRepository.searchDestinationsByVectorNear(
+                () -> destinationRepository.searchTop5ByEmbeddingNearLocation(
                         queryVector, point.x(), point.y(), radius));
 
         if (results.isEmpty()) {
             return "No destinations found within " + radius + " km of " + nearDestinationName + " matching: " + query;
         }
         StringBuilder sb = new StringBuilder("Found nearby destinations:\n");
-        for (DestinationEntity d : results) {
-            sb.append(String.format("- %s (ID:%d, %s): %s\n", d.name(), d.id(), d.region(), d.description()));
+        for (DestinationSearchResult d : results) {
+            sb.append(String.format(Locale.ROOT,
+                "- %s (ID:%d, %s, cosine distance %.3f; lower is closer): %s\n",
+                d.name(), d.id(), d.region(), d.vectorDistance(), d.description()));
         }
         return sb.toString();
     }

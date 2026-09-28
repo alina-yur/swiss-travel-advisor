@@ -112,7 +112,60 @@ and the most recent 20 messages in each conversation are retained. Use the same
 conversation ID when adding or retrieving items from that conversation's
 wishlist.
 
-### 4. Use local Oracle if ADB is unavailable
+### 4. Showcase hybrid ranking and its score
+
+Use a request that combines meaning with a hard location constraint:
+
+```text
+Find a quiet lakeside destination within 50 km of Lucerne.
+```
+
+For nearby destination searches, `DestinationRepository` runs one explicit
+Micronaut Data `@Query` that applies Oracle Spatial's radius predicate and then
+orders the remaining rows with Oracle vector cosine distance. It returns a
+`DestinationSearchResult` projection rather than the complete database entity.
+The projection includes the raw cosine distance, and the tool output labels it
+clearly: **lower is closer**. It is a ranking signal, not a confidence percentage
+or a guarantee that the recommendation is correct.
+
+For a reliable on-stage view, open the corresponding `TOOL` span in Phoenix.
+Its output shows each destination and cosine distance even if the assistant
+chooses not to repeat the numeric value in its prose.
+
+### 5. Verify the build and real Oracle query
+
+Run the fast unit tests first; these do not require Oracle or an OpenAI key:
+
+```bash
+./mvnw test
+```
+
+The hybrid query has a separate opt-in integration test because an in-memory
+database cannot verify Oracle's vector and spatial functions. To run it against
+local Oracle Database Free:
+
+```bash
+podman machine start
+podman-compose up -d oracle
+
+# Wait until this prints "healthy".
+podman inspect --format '{{.State.Health.Status}}' swiss-travel-oracle
+
+export ORACLE_INTEGRATION_TEST=true
+export ORACLE_JDBC_URL='jdbc:oracle:thin:@//localhost:1521/FREEPDB1'
+export DB_USERNAME='TRAVEL'
+export DB_PASSWORD="${LOCAL_ORACLE_PASSWORD:-LocalDemoPassword1}"
+
+./mvnw clean test -Dtest=OracleHybridSearchIT
+```
+
+The test inserts two temporary 1,536-dimensional vectors, proves that the
+spatial predicate includes them, verifies that cosine distance orders the exact
+match first, checks projection mapping, and removes the temporary rows. To run
+against ADB instead, keep the same test command and supply the ADB JDBC URL and
+credentials already used by the application.
+
+### 6. Use local Oracle if ADB is unavailable
 
 Stop the application with `Ctrl-C`, then run:
 
@@ -129,7 +182,7 @@ Flyway creates and seeds the same schema used with ADB. The `oracle-data` volume
 retains the database and generated embeddings between runs. The local-only demo
 password can be overridden with `LOCAL_ORACLE_PASSWORD`.
 
-### 5. Shut down after the demo
+### 7. Shut down after the demo
 
 Stop the application with `Ctrl-C`, then stop the remaining demo containers:
 

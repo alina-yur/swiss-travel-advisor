@@ -3,6 +3,7 @@ package com.example.tools;
 import com.example.entity.DestinationEntity;
 import com.example.entity.HotelEntity;
 import com.example.observability.AiObservability;
+import com.example.model.DestinationSearchResult;
 import com.example.repository.ActivityRepository;
 import com.example.repository.DestinationRepository;
 import com.example.repository.HotelRepository;
@@ -98,6 +99,28 @@ class TravelToolsTest {
 
         assertTrue(result.contains("Zurich Old Town Boutique"));
         verify(hotelRepository).findTop5ByDescriptionEmbeddingNear(any(Vector.class), eq(2.0));
+    }
+
+    @Test
+    void nearbyDestinationSearchIncludesCosineDistance() {
+        Point lucerneLocation = mock(Point.class);
+        when(lucerneLocation.x()).thenReturn(8.3093);
+        when(lucerneLocation.y()).thenReturn(47.0502);
+        when(destinationRepository.findByNameEqualsIgnoreCase("Lucerne")).thenReturn(Optional.of(
+            new DestinationEntity(3L, "Lucerne", "Central Switzerland", "Lake and mountains", null, lucerneLocation)
+        ));
+        when(destinationRepository.searchTop5ByEmbeddingNearLocation(
+            any(Vector.class), eq(8.3093), eq(47.0502), eq(50.0)
+        )).thenReturn(List.of(new DestinationSearchResult(
+            3L, "Lucerne", "Central Switzerland", "Lake and mountains", 0.125
+        )));
+
+        String result = tools.searchNearbyDestinations("quiet lakeside destination", "Lucerne", null);
+
+        assertTrue(result.contains("cosine distance 0.125; lower is closer"));
+        verify(destinationRepository).searchTop5ByEmbeddingNearLocation(
+            any(Vector.class), eq(8.3093), eq(47.0502), eq(50.0)
+        );
     }
 
     private HotelEntity hotel(Long destinationId, String name) {

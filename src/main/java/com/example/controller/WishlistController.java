@@ -8,11 +8,14 @@ import io.micronaut.http.annotation.QueryValue;
 import io.micronaut.http.HttpStatus;
 import io.micronaut.http.exceptions.HttpStatusException;
 import io.micronaut.core.annotation.Nullable;
+import io.micronaut.scheduling.TaskExecutors;
+import io.micronaut.scheduling.annotation.ExecuteOn;
 
 import java.util.List;
 import java.util.UUID;
 
 @Controller("/api")
+@ExecuteOn(TaskExecutors.BLOCKING)
 public class WishlistController {
     private final WishlistRepository wishlistRepository;
 

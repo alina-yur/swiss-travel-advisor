@@ -10,13 +10,13 @@
   <parent>
     <groupId>io.micronaut.platform</groupId>
     <artifactId>micronaut-parent</artifactId>
-    <version>5.0.0</version>
+    <version>5.2.0</version>
   </parent>
   <properties>
     <packaging>jar</packaging>
     <jdk.version>25</jdk.version>
     <release.version>25</release.version>
-    <micronaut.version>5.0.0</micronaut.version>
+    <micronaut.version>5.2.8</micronaut.version>
     <micronaut.test.resources.enabled>false</micronaut.test.resources.enabled>
     <micronaut.aot.enabled>false</micronaut.aot.enabled>
     <micronaut.aot.packageName>com.example.aot.generated</micronaut.aot.packageName>
@@ -177,6 +177,12 @@
         <groupId>org.graalvm.buildtools</groupId>
         <artifactId>native-maven-plugin</artifactId>
         <configuration>
+          <!--
+            Analyze the compiled classes instead of the shaded application JAR.
+            This also lets Micronaut Flyway discover migrations from a regular
+            file-system path without reopening Native Image's JAR file system.
+          -->
+          <classesDirectory>${project.build.outputDirectory}</classesDirectory>
           <buildArgs>
             <buildArg>-H:+SharedArenaSupport</buildArg>
             <buildArg>--initialize-at-build-time=org.slf4j.simple.SimpleLogger,org.slf4j.simple.SimpleLoggerConfiguration,org.slf4j.simple.SimpleLoggerFactory,org.slf4j.simple.SimpleServiceProvider,org.slf4j.simple.OutputChoice,org.slf4j.simple.OutputChoice$OutputChoiceType</buildArg>

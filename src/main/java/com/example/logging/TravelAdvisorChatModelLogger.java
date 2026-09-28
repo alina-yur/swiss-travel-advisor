@@ -40,7 +40,7 @@ public class TravelAdvisorChatModelLogger implements ChatModelListener {
         if (lastMessage instanceof UserMessage userMessage && userMessage.hasSingleText()) {
             List<ToolSpecification> toolSpecifications = context.chatRequest().toolSpecifications();
             LOG.info("{} user: {}", PREFIX, summarize(userMessage.singleText()));
-            LOG.info("{} tools available{}: {}", PREFIX,
+            LOG.info("{} tool{} available: {}", PREFIX,
                 pluralize(toolSpecifications == null ? 0 : toolSpecifications.size()),
                 formatToolSpecifications(toolSpecifications));
             return;

@@ -1,6 +1,7 @@
 package com.example.repository;
 
 import com.example.entity.DestinationEntity;
+import com.example.model.DestinationSearchResult;
 import io.micronaut.data.annotation.Query;
 import io.micronaut.data.jdbc.annotation.JdbcRepository;
 import io.micronaut.data.model.geo.Point;
@@ -19,6 +20,43 @@ public interface DestinationRepository extends CrudRepository<DestinationEntity,
     List<DestinationEntity> findTop5ByDescriptionEmbeddingNear(Vector embedding, Double maxDistance);
 
     List<DestinationEntity> findTop5ByLocationNear(Point point, double distance);
+
+    @Query(value = """
+        SELECT id,
+               name,
+               region,
+               description,
+               vector_distance
+        FROM (
+            SELECT d.id,
+                   d.name,
+                   d.region,
+                   d.description,
+                   VECTOR_DISTANCE(d.description_embedding, :embedding, COSINE) AS vector_distance
+            FROM destinations d
+            WHERE d.description_embedding IS NOT NULL
+              AND d.location IS NOT NULL
+              AND SDO_WITHIN_DISTANCE(
+                    d.location,
+                    MDSYS.SDO_GEOMETRY(
+                        2001,
+                        4326,
+                        MDSYS.SDO_POINT_TYPE(:longitude, :latitude, NULL),
+                        NULL,
+                        NULL
+                    ),
+                    'distance=' || :radiusKm || ' unit=KM'
+                  ) = 'TRUE'
+        )
+        ORDER BY vector_distance
+        FETCH FIRST 5 ROWS ONLY
+        """, nativeQuery = true)
+    List<DestinationSearchResult> searchTop5ByEmbeddingNearLocation(
+        Vector embedding,
+        double longitude,
+        double latitude,
+        double radiusKm
+    );
 
     List<DestinationEntity> findByDescriptionEmbeddingIsNull();
 

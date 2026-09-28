@@ -1,7 +1,6 @@
 package com.example.repository;
 
 import com.example.entity.ActivityEntity;
-import com.example.entity.DestinationEntity;
 import com.example.entity.HotelEntity;
 import io.micronaut.data.connection.annotation.Connectable;
 import io.micronaut.data.model.vector.Vector;
@@ -27,43 +26,6 @@ public class SpatialSearchRepository {
 
     public SpatialSearchRepository(DataSource dataSource) {
         this.dataSource = dataSource;
-    }
-
-    public List<DestinationEntity> searchDestinationsByVectorNear(Vector embedding, double longitude, double latitude, double radiusKm) {
-        String sql = """
-            SELECT id, name, region, description
-            FROM destinations
-            WHERE description_embedding IS NOT NULL
-              AND location IS NOT NULL
-              AND SDO_WITHIN_DISTANCE(
-                    location,
-                    MDSYS.SDO_GEOMETRY(2001, 4326, MDSYS.SDO_POINT_TYPE(?, ?, NULL), NULL, NULL),
-                    'distance=' || ? || ' unit=KM'
-                  ) = 'TRUE'
-            ORDER BY VECTOR_DISTANCE(description_embedding, ?, COSINE)
-            FETCH FIRST 5 ROWS ONLY
-            """;
-
-        List<DestinationEntity> results = new ArrayList<>();
-        try (Connection conn = dataSource.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql)) {
-            bindLocationAndVector(stmt, embedding, longitude, latitude, radiusKm, 1);
-            try (ResultSet rs = stmt.executeQuery()) {
-                while (rs.next()) {
-                    results.add(new DestinationEntity(
-                        rs.getLong("id"),
-                        rs.getString("name"),
-                        rs.getString("region"),
-                        rs.getString("description"),
-                        null,
-                        null
-                    ));
-                }
-            }
-        } catch (SQLException e) {
-            LOG.error("Error searching destinations by vector near location", e);
-        }
-        return results;
     }
 
     public List<HotelEntity> searchHotelsByVectorNear(

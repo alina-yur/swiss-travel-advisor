@@ -26,6 +26,7 @@ import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -87,6 +88,31 @@ class TravelToolsTest {
         assertTrue(result.contains("Matterhorn View Hotel"));
         verify(spatialSearchRepository).searchHotelsByVectorNear(
             any(Vector.class), eq(7.7491), eq(46.0207), eq(15.0), isNull()
+        );
+    }
+
+    @Test
+    void nearbyHotelSearchUsesDefaultQueryWhenModelSuppliesBlankQuery() {
+        Point lucerneLocation = mock(Point.class);
+        when(lucerneLocation.x()).thenReturn(8.3093);
+        when(lucerneLocation.y()).thenReturn(47.0502);
+        when(destinationRepository.findByNameEqualsIgnoreCase("Lucerne")).thenReturn(Optional.of(
+            new DestinationEntity(3L, "Lucerne", "Central Switzerland", "Lake and mountains", null, lucerneLocation)
+        ));
+        when(spatialSearchRepository.searchHotelsByVectorNear(
+            any(Vector.class), eq(8.3093), eq(47.0502), eq(20.0), isNull()
+        )).thenReturn(List.of(hotel(3L, "Lake Lucerne Hotel")));
+        when(destinationRepository.findById(3L)).thenReturn(Optional.of(
+            new DestinationEntity(3L, "Lucerne", "Central Switzerland", "Lake and mountains", null, lucerneLocation)
+        ));
+
+        String result = tools.searchNearbyHotels("", "Lucerne", 20.0, 0.0);
+
+        assertTrue(result.contains("Lake Lucerne Hotel"));
+        verify(embeddingService).generateEmbedding("hotels");
+        verify(embeddingService, never()).generateEmbedding("");
+        verify(spatialSearchRepository).searchHotelsByVectorNear(
+            any(Vector.class), eq(8.3093), eq(47.0502), eq(20.0), isNull()
         );
     }
 

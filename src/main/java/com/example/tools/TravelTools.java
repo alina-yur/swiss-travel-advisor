@@ -65,7 +65,7 @@ public class TravelTools {
     }
 
     private String doSearchDestinations(String query) {
-        Vector queryVector = embedding(query);
+        Vector queryVector = embedding(query, "destinations");
         List<DestinationEntity> results = observability.traceRetriever(
                 "Oracle destination vector search",
                 parameters("entity.type", "destination", "max_distance", MAX_COSINE_DISTANCE),
@@ -95,7 +95,7 @@ public class TravelTools {
 
         double radius = radiusOrDefault(radiusKm, DEFAULT_DESTINATION_RADIUS_KM);
         Point point = location.get();
-        Vector queryVector = embedding(query);
+        Vector queryVector = embedding(query, "destinations");
         List<DestinationSearchResult> results = observability.traceRetriever(
                 "Oracle destination vector + spatial search",
                 parameters("entity.type", "destination", "location", nearDestinationName, "radius_km", radius),
@@ -122,7 +122,7 @@ public class TravelTools {
     }
 
     private String doSearchHotels(String query, Long destinationId, Double maxPrice) {
-        Vector queryVector = embedding(query);
+        Vector queryVector = embedding(query, "hotels");
         Long effectiveDestinationId = positiveOrNull(destinationId);
         Double effectiveMaxPrice = positiveOrNull(maxPrice);
         List<HotelEntity> results;
@@ -169,7 +169,7 @@ public class TravelTools {
 
         double radius = radiusOrDefault(radiusKm, DEFAULT_HOTEL_RADIUS_KM);
         Point point = location.get();
-        Vector queryVector = embedding(query);
+        Vector queryVector = embedding(query, "hotels");
         Double effectiveMaxPrice = positiveOrNull(maxPrice);
         List<HotelEntity> results = observability.traceRetriever(
                 "Oracle hotel vector + spatial search",
@@ -202,7 +202,7 @@ public class TravelTools {
     }
 
     private String doSearchActivities(String query, Long destinationId) {
-        Vector queryVector = embedding(query);
+        Vector queryVector = embedding(query, "activities");
         Long effectiveDestinationId = positiveOrNull(destinationId);
         List<ActivityEntity> results = observability.traceRetriever(
                 "Oracle activity vector search",
@@ -237,7 +237,7 @@ public class TravelTools {
 
         double radius = radiusOrDefault(radiusKm, DEFAULT_ACTIVITY_RADIUS_KM);
         Point point = location.get();
-        Vector queryVector = embedding(query);
+        Vector queryVector = embedding(query, "activities");
         List<ActivityEntity> results = observability.traceRetriever(
                 "Oracle activity vector + spatial search",
                 parameters("entity.type", "activity", "location", nearDestinationName, "radius_km", radius),
@@ -326,8 +326,9 @@ public class TravelTools {
         return sb.toString();
     }
 
-    private Vector embedding(String query) {
-        return new FloatVector(embeddingService.generateEmbedding(query));
+    private Vector embedding(String query, String defaultQuery) {
+        String effectiveQuery = query == null || query.isBlank() ? defaultQuery : query;
+        return new FloatVector(embeddingService.generateEmbedding(effectiveQuery));
     }
 
     private Optional<Point> locationForDestination(String destinationName) {

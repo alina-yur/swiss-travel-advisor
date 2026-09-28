@@ -26,7 +26,7 @@ fi
 cd "$project_dir"
 export LOCAL_ORACLE_PASSWORD="$password"
 
-echo "Starting the local Oracle fallback (Phoenix is not changed)..."
+echo "Starting local Oracle (Phoenix is managed separately)..."
 podman-compose up -d oracle
 
 echo "Waiting for Oracle to become healthy..."
@@ -41,7 +41,7 @@ for ((attempt = 1; attempt <= max_attempts; attempt++)); do
     export DATASOURCES_DEFAULT_URL="$ORACLE_JDBC_URL"
     export DATASOURCES_DEFAULT_USERNAME="$DB_USERNAME"
     export DATASOURCES_DEFAULT_PASSWORD="$DB_PASSWORD"
-    echo "Oracle is healthy. Starting the native executable with the local database."
+    echo "Oracle is healthy. Starting the native executable."
     exec "$native_executable"
   fi
 

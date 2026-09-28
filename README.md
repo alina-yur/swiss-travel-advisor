@@ -76,6 +76,32 @@ The same executable works with both ADB and local Oracle. The database URL,
 credentials, OpenAI key, and model are runtime configuration; a separate local
 build is not required.
 
+### Terminal database explorer
+
+If the VS Code database viewer is unavailable, use the bundled SQLcl command
+through the project's small read-only explorer. It uses the saved
+`MT ADB Alina Production` connection without putting its password in shell
+history:
+
+```bash
+# List tables in MICRONAUTADMIN.
+./scripts/explore-db-list-tables.sh
+
+# Show up to 20 rows from HOTELS in a terminal table.
+./scripts/explore-db-hotels.sh
+
+# Show up to 10 wishlist rows.
+./scripts/explore-db-wishlist.sh 10
+```
+
+The preview automatically hides vector embeddings, binary values, and Oracle
+object columns so wide AI and spatial fields do not overwhelm the terminal.
+The wishlist preview resolves each internal `item_id` to its destination,
+hotel, or activity name and displays useful catalog details.
+For another travel table, use `./scripts/explore-db.sh TABLE [ROW_COUNT]`.
+Set `DBTOOLS_CONNECTION` to use a differently named saved SQL Developer
+connection, or `DB_SCHEMA` to browse another schema.
+
 ### 3. Try the demo
 
 With HTTPie:

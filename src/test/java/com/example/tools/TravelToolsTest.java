@@ -63,7 +63,7 @@ class TravelToolsTest {
             }
             return defaultValue(method);
         });
-        SpatialSearchRepository spatialRepository = new SpatialSearchRepository(null) {
+        SpatialSearchRepository spatialRepository = new SpatialSearchRepository(null, null) {
             @Override
             public List<HotelEntity> searchHotelsByVectorNear(
                     Vector embedding, double longitude, double latitude, double radiusKm, Double maxPrice) {

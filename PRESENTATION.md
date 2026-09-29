@@ -180,7 +180,7 @@ interface HotelRepository {
 
 Micronaut Data parses and validates this repository method during compilation; `Top5` bounds the semantically ranked result.
 
-Code: [SpatialSearchRepository.java](src/main/java/com/example/repository/SpatialSearchRepository.java)
+Code: [HotelRepository.java](src/main/java/com/example/repository/HotelRepository.java)
 
 ---
 
@@ -198,6 +198,32 @@ FETCH FIRST 5 ROWS ONLY;                                    -- bounded model con
 ```
 
 Code: [HotelRepository.java](src/main/java/com/example/repository/HotelRepository.java)
+
+---
+
+## A simple SQL Developer check
+
+For a quick live database demo, open the `MT ADB Alina Production` connection in
+SQL Developer for VS Code and open a SQL Worksheet or SQL Notebook. In the
+seeded catalog, Lucerne has destination ID `3`:
+
+```sql
+SELECT
+    d.name AS destination,
+    h.name AS hotel,
+    h.price_per_night
+FROM hotels h
+JOIN destinations d
+    ON d.id = h.destination_id
+WHERE d.id = 3
+  AND h.price_per_night <= 250
+ORDER BY h.price_per_night;
+```
+
+This shows a normal relational join and a hard business filter. Change `250`
+to `350` and run it again to show how the result set changes. The application
+then builds on this same relational data with Oracle Spatial filtering and
+vector ranking.
 
 ---
 

@@ -1,6 +1,7 @@
 package com.example.repository;
 
 import com.example.entity.HotelEntity;
+import com.example.model.NearbyHotelSearchResult;
 import io.micronaut.data.annotation.Query;
 import io.micronaut.data.jdbc.annotation.JdbcRepository;
 import io.micronaut.data.model.query.builder.sql.Dialect;
@@ -27,6 +28,38 @@ public interface HotelRepository extends CrudRepository<HotelEntity, Long> {
         Double maxPrice,
         Vector embedding,
         Double maxDistance
+    );
+
+    @Query(value = """
+        SELECT h.id,
+               h.destination_id,
+               h.name,
+               h.price_per_night,
+               h.description
+        FROM hotels h
+        WHERE h.description_embedding IS NOT NULL
+          AND h.location IS NOT NULL
+          AND (:maxPrice IS NULL OR h.price_per_night <= :maxPrice)
+          AND SDO_WITHIN_DISTANCE(
+                h.location,
+                MDSYS.SDO_GEOMETRY(
+                    2001,
+                    4326,
+                    MDSYS.SDO_POINT_TYPE(:longitude, :latitude, NULL),
+                    NULL,
+                    NULL
+                ),
+                'distance=' || :radiusKm || ' unit=KM'
+              ) = 'TRUE'
+        ORDER BY VECTOR_DISTANCE(h.description_embedding, :embedding, COSINE)
+        FETCH FIRST 5 ROWS ONLY
+        """, nativeQuery = true)
+    List<NearbyHotelSearchResult> searchTop5ByEmbeddingNearLocation(
+        Vector embedding,
+        double longitude,
+        double latitude,
+        double radiusKm,
+        Double maxPrice
     );
 
     List<HotelEntity> findByDescriptionEmbeddingIsNull();

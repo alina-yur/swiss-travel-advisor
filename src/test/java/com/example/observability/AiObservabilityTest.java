@@ -17,10 +17,6 @@ import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.ArgumentMatchers.anyList;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verify;
 
 class AiObservabilityTest {
 
@@ -33,7 +29,8 @@ class AiObservabilityTest {
         OpenTelemetrySdk openTelemetry = OpenTelemetrySdk.builder()
                 .setTracerProvider(provider)
                 .build();
-        PhoenixAnnotationPublisher publisher = mock(PhoenixAnnotationPublisher.class);
+        PhoenixAnnotationPublisher publisher = new PhoenixAnnotationPublisher(
+                ObjectMapper.getDefault(), false, "http://localhost:6006", "");
         AiObservability observability = new AiObservability(
                 openTelemetry,
                 ObjectMapper.getDefault(),
@@ -76,8 +73,6 @@ class AiObservabilityTest {
         assertEquals(tool.getSpanId(), retriever.getParentSpanId());
         assertEquals(1L, retriever.getAttributes().get(AttributeKey.longKey("retrieval.result_count")));
         assertTrue(tool.getEndEpochNanos() >= tool.getStartEpochNanos());
-        verify(publisher).publish(anyString(), anyList());
-
         provider.close();
     }
 

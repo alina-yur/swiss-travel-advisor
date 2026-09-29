@@ -29,6 +29,26 @@ On startup, Flyway runs database migrations and loads destinations, hotels, and
 activities. The `DataInitializer` then generates and persists vector embeddings
 for all entries, enabling semantic search from the first request.
 
+### Exact vector search and scaling
+
+The current application uses **exact vector search**. Oracle calculates cosine
+distance for every row that satisfies the SQL filters, orders those rows by
+distance, and returns the closest five. This is appropriate for the small demo
+catalog: it is simple, deterministic, and returns the exact nearest results.
+
+Flyway owns the schema and intentionally does not create a vector index, so the
+demo does not use IVF or HNSW indexing.
+
+For a large catalog, add an Oracle IVF or HNSW vector index and use an
+approximate top-K query when exact scans no longer meet the required latency or
+throughput. Approximate search examines a smaller candidate space and can be
+substantially faster, at the cost of possibly not returning every true nearest
+neighbor. The decision should be based on measurements of latency, throughput,
+recall, index memory, and update cost rather than on a fixed row-count rule.
+
+See Oracle's [vector-index guidelines](https://docs.oracle.com/en/database/oracle/oracle-database/26/vecse/guidelines-using-vector-indexes.html)
+and [`VECTOR_DISTANCE` documentation](https://docs.oracle.com/en/database/oracle/oracle-database/26/vecse/vector_distance.html).
+
 ## Demo Flow
 
 ### 1. Configure the services

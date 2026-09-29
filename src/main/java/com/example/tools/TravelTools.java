@@ -290,7 +290,8 @@ public class TravelTools {
         if (!wishlistRepository.save(conversationId, new WishlistItem(type, itemId))) {
             return "Error: could not save " + name + " to the wishlist.";
         }
-        return "Added to wishlist: " + name;
+        return "Wishlist confirmed: " + name
+            + " is on your wishlist. No duplicate was created.";
     }
 
     @Tool("Get this conversation's wishlist with all saved destinations, hotels, and activities.")

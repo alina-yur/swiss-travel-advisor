@@ -1,7 +1,9 @@
 package com.example.repository;
 
+import com.example.entity.WishlistItemEntity;
 import com.example.model.WishlistItem;
 import io.micronaut.data.connection.annotation.Connectable;
+import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -31,32 +33,26 @@ public class WishlistRepository {
         WHERE w.conversation_id = ?
         ORDER BY w.id DESC
         """;
-    private static final String MERGE_WISHLIST = """
-        MERGE INTO wishlist_items target
-        USING (SELECT ? AS conversation_id, ? AS item_type, ? AS item_id FROM dual) source
-        ON (target.conversation_id = source.conversation_id
-            AND target.item_type = source.item_type
-            AND target.item_id = source.item_id)
-        WHEN NOT MATCHED THEN
-            INSERT (conversation_id, item_type, item_id)
-            VALUES (source.conversation_id, source.item_type, source.item_id)
-        """;
-
     private final DataSource dataSource;
+    private final WishlistWriteRepository writeRepository;
 
-    public WishlistRepository(DataSource dataSource) {
+    @Inject
+    public WishlistRepository(DataSource dataSource, WishlistWriteRepository writeRepository) {
         this.dataSource = dataSource;
+        this.writeRepository = writeRepository;
+    }
+
+    // Retains the lightweight constructor used by tests that do not exercise wishlist writes.
+    public WishlistRepository(DataSource dataSource) {
+        this(dataSource, null);
     }
 
     public boolean save(String conversationId, WishlistItem item) {
-        try (Connection conn = dataSource.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(MERGE_WISHLIST)) {
-            stmt.setString(1, conversationId);
-            stmt.setString(2, item.itemType());
-            stmt.setLong(3, item.itemId());
-            stmt.executeUpdate();
+        try {
+            writeRepository.upsert(new WishlistItemEntity(
+                conversationId, item.itemType(), item.itemId()));
             return true;
-        } catch (SQLException e) {
+        } catch (RuntimeException e) {
             LOG.error("Error saving wishlist item", e);
             return false;
         }

@@ -14,7 +14,7 @@
 
 ### Stack
 
-- GraalVM — native-image compilation
+- GraalVM — Native Image compilation
 - Micronaut — lightweight JVM framework with compile-time dependency injection
 - LangChain4j — LLM orchestration and tool calling
 - Oracle Database — vector storage and similarity search
@@ -35,7 +35,7 @@
 
 ---
 
-## What Micronaut contributes
+## Web aplication
 
 Micronaut turns the idea into a normal Java application:
 
@@ -138,13 +138,52 @@ For example, `FloatVector contentEmbedding` maps to `content_embedding VECTOR(15
 
 It can also translate spatial repository names into Oracle operations:
 
-```text
-findByLocationNear(point, distance)
-                    ↓
-SDO_WITHIN_DISTANCE(...)
+```java
+SearchResults<HotelEntity>
+searchTop5ByContentEmbeddingNearAndLocationNearAndPricePerNightLessThanEquals(
+    Vector embedding,
+    Score maxDistance,
+    Point location,
+    double radiusMeters,
+    Double maxPrice
+);
 ```
 
-[HotelEntity.java](src/main/java/com/example/entity/HotelEntity.java)
+Micronaut Data generates the cosine ranking, `SDO_WITHIN_DISTANCE`, price
+predicate, and top-five limit at compile time. No handwritten hotel search SQL
+is required.
+
+At a high level, Micronaut Data reads the repository method name during
+compilation, validates its properties and parameter types, and generates the
+Oracle query implementation. There is no runtime method-name parsing.
+
+```text
+HotelRepository.java
+        ↓ compile time
+target/classes/com/example/repository/
+    $HotelRepository$Intercepted$Definition$Exec.class
+        ↓ runtime
+Oracle AI Database
+```
+
+Conceptually, the generated query is:
+
+```sql
+SELECT ..., VECTOR_DISTANCE(...) AS mn_score
+FROM hotels
+WHERE VECTOR_DISTANCE(content_embedding, ?, COSINE) <= ?
+  AND SDO_WITHIN_DISTANCE(location, ?, 'distance=' || ?) = 'TRUE'
+  AND price_per_night <= ?
+ORDER BY VECTOR_DISTANCE(content_embedding, ?, COSINE)
+FETCH NEXT 5 ROWS ONLY
+```
+
+The generated implementation performs semantic ranking while Oracle applies
+the geographic radius and maximum-price constraints before returning the five
+closest matches. The SQL above is intentionally abbreviated; the generated
+class contains the complete dialect-specific statement and parameter mapping.
+
+[HotelRepository.java](src/main/java/com/example/repository/HotelRepository.java) · [HotelEntity.java](src/main/java/com/example/entity/HotelEntity.java)
 
 ---
 
@@ -210,6 +249,55 @@ request → tool call → application result → response
 ```
 
 Code: [TravelAdvisorChatModelLogger.java](src/main/java/com/example/logging/TravelAdvisorChatModelLogger.java)
+
+---
+
+## Reading annotation scores
+
+These scores are **pass rates for simple checks**, not model confidence scores.
+
+```text
+0.00 = the check failed for every evaluated trace
+1.00 = the check passed for every evaluated trace
+0.83 = the check passed for 83% of evaluated traces
+```
+
+| Annotation | Simple meaning |
+|---|---|
+| `response_present` | Did the assistant return a non-empty answer? |
+| `tool_selection` | Did it call the search tool expected for that request? |
+| `user_feedback` | Did users who submitted feedback mark the answer as helpful? |
+| `wishlist_permission` | Did the application avoid changing the wishlist without an explicit request? |
+
+For the example dashboard:
+
+```text
+response_present     1.00  Every evaluated request received an answer.
+tool_selection       0.83  The expected tool was used 83% of the time.
+user_feedback        1.00  All submitted ratings in this period were positive.
+wishlist_permission  1.00  No unauthorized wishlist change was detected.
+```
+
+### How to explain it on stage
+
+> “These lines turn important application behavior into measurable checks. A
+> score of one means every evaluated trace passed. Tool selection is at 0.83,
+> so that is the line I would investigate: I can open the failing trace and see
+> the user request, the tool the model chose, and the tool our rule expected.”
+
+Only traces that have a particular annotation contribute to that annotation's
+average. For example, `user_feedback = 1.00` means all **submitted ratings**
+were positive; it does not mean every user submitted feedback. Likewise,
+`response_present = 1.00` confirms that answers were returned, not that every
+answer was correct.
+
+The code-based checks are intentionally deterministic and easy to explain.
+`tool_selection` uses demo-specific keyword rules, so a low score can indicate
+either a model/tool-routing problem or a rule that needs refinement. Open the
+individual trace and read its annotation explanation before drawing a
+conclusion from the average.
+
+Code: [AiObservability.java](src/main/java/com/example/observability/AiObservability.java) · [PhoenixAnnotationPublisher.java](src/main/java/com/example/observability/PhoenixAnnotationPublisher.java)
 
 ---
 

@@ -4,6 +4,6 @@ SELECT d.name AS destination,
 FROM hotels h
 JOIN destinations d
   ON d.id = h.destination_id
-WHERE d.name = 'Lucerne'
-  AND h.price_per_night <= 200
+WHERE d.name = 'Zurich'
+  AND h.price_per_night <= 400
 ORDER BY h.price_per_night;

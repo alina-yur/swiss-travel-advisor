@@ -76,19 +76,6 @@ public class WishlistRepository {
         return results;
     }
 
-    public void deleteAll(String conversationId) {
-        String sql = "DELETE FROM wishlist_items WHERE conversation_id = ?";
-
-        try (Connection conn = dataSource.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql)) {
-            stmt.setString(1, conversationId);
-            int deleted = stmt.executeUpdate();
-            LOG.debug("Deleted {} wishlist items for conversation {}", deleted, conversationId);
-        } catch (SQLException e) {
-            LOG.error("Error deleting all wishlist items", e);
-        }
-    }
-
     private WishlistItem mapWishlistItem(ResultSet rs) throws SQLException {
         return new WishlistItem(
             rs.getLong("id"),

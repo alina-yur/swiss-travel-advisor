@@ -1,10 +1,10 @@
 package com.example.tools;
 
+import com.example.entity.ActivityEntity;
 import com.example.entity.DestinationEntity;
 import com.example.entity.HotelEntity;
 import com.example.model.DestinationSearchResult;
-import com.example.model.NearbyActivitySearchResult;
-import com.example.model.NearbyHotelSearchResult;
+import com.example.model.WishlistItem;
 import com.example.observability.AiObservability;
 import com.example.observability.PhoenixAnnotationPublisher;
 import com.example.repository.ActivityRepository;
@@ -13,6 +13,9 @@ import com.example.repository.HotelRepository;
 import com.example.repository.WishlistRepository;
 import com.example.service.EmbeddingService;
 import io.micronaut.data.model.geo.Point;
+import io.micronaut.data.model.vector.search.Score;
+import io.micronaut.data.model.vector.search.SearchResult;
+import io.micronaut.data.model.vector.search.SearchResults;
 import io.micronaut.serde.ObjectMapper;
 import io.opentelemetry.api.OpenTelemetry;
 import org.junit.jupiter.api.BeforeEach;
@@ -30,9 +33,10 @@ class TravelToolsTest {
     private final List<String> embeddedTexts = new ArrayList<>();
     private final List<DestinationEntity> destinations = new ArrayList<>();
     private List<HotelEntity> genericHotels = List.of();
-    private List<NearbyHotelSearchResult> nearbyHotels = List.of();
-    private List<NearbyActivitySearchResult> nearbyActivities = List.of();
+    private SearchResults<HotelEntity> nearbyHotels = SearchResults.of(List.of());
+    private SearchResults<ActivityEntity> nearbyActivities = SearchResults.of(List.of());
     private List<DestinationSearchResult> nearbyDestinations = List.of();
+    private List<WishlistItem> wishlistItems = List.of();
     private NearbyHotelCall nearbyHotelCall;
     private NearbyActivityCall nearbyActivityCall;
     private String genericHotelMethod;
@@ -58,9 +62,11 @@ class TravelToolsTest {
             default -> defaultValue(method);
         });
         HotelRepository hotelRepository = proxy(HotelRepository.class, (method, arguments) -> {
-            if (method.equals("searchTop5ByEmbeddingNearLocation")) {
+            if (method.equals("searchTop5ByContentEmbeddingNearAndLocationNearAndPricePerNightLessThanEquals")) {
+                Point point = (Point) arguments[2];
                 nearbyHotelCall = new NearbyHotelCall(
-                    (double) arguments[1], (double) arguments[2], (double) arguments[3], (Double) arguments[4]);
+                    point.x(), point.y(), (double) arguments[3] / 1_000,
+                    ((Score) arguments[1]).value(), (Double) arguments[4]);
                 return nearbyHotels;
             }
             if (method.startsWith("findTop5")) {
@@ -80,14 +86,21 @@ class TravelToolsTest {
             destinationRepository,
             hotelRepository,
             proxy(ActivityRepository.class, (method, arguments) -> {
-                if (method.equals("searchTop5ByEmbeddingNearLocation")) {
+                if (method.equals("searchTop5ByContentEmbeddingNearAndLocationNear")) {
+                    Point point = (Point) arguments[2];
                     nearbyActivityCall = new NearbyActivityCall(
-                        (double) arguments[1], (double) arguments[2], (double) arguments[3]);
+                        point.x(), point.y(), (double) arguments[3] / 1_000,
+                        ((Score) arguments[1]).value());
                     return nearbyActivities;
                 }
                 return defaultValue(method);
             }),
-            new WishlistRepository(null),
+            new WishlistRepository(null) {
+                @Override
+                public List<WishlistItem> findAll(String conversationId) {
+                    return wishlistItems;
+                }
+            },
             observability
         );
     }
@@ -95,24 +108,34 @@ class TravelToolsTest {
     @Test
     void nearbyHotelSearchTreatsZeroMaxPriceAsNoBudgetFilter() {
         destinations.add(destination(1L, "Zermatt", 7.7491, 46.0207));
-        nearbyHotels = List.of(nearbyHotel(1L, "Matterhorn View Hotel"));
+        nearbyHotels = nearbyHotels(1L, "Matterhorn View Hotel");
 
         String result = tools.searchNearbyHotels("recommend hotels", "Zermatt", 15.0, 0.0);
 
         assertTrue(result.contains("Matterhorn View Hotel"));
-        assertEquals(new NearbyHotelCall(7.7491, 46.0207, 15.0, null), nearbyHotelCall);
+        assertEquals(new NearbyHotelCall(7.7491, 46.0207, 15.0, 2.0, 99_999_999.99), nearbyHotelCall);
     }
 
     @Test
     void nearbyHotelSearchUsesDefaultQueryWhenModelSuppliesBlankQuery() {
         destinations.add(destination(3L, "Lucerne", 8.3093, 47.0502));
-        nearbyHotels = List.of(nearbyHotel(3L, "Lake Lucerne Hotel"));
+        nearbyHotels = nearbyHotels(3L, "Lake Lucerne Hotel");
 
         String result = tools.searchNearbyHotels("", "Lucerne", 20.0, 0.0);
 
         assertTrue(result.contains("Lake Lucerne Hotel"));
         assertEquals(List.of("hotels"), embeddedTexts);
-        assertEquals(new NearbyHotelCall(8.3093, 47.0502, 20.0, null), nearbyHotelCall);
+        assertEquals(new NearbyHotelCall(8.3093, 47.0502, 20.0, 2.0, 99_999_999.99), nearbyHotelCall);
+    }
+
+    @Test
+    void nearbyHotelSearchAppliesSpecifiedMaximumPrice() {
+        destinations.add(destination(1L, "Zermatt", 7.7491, 46.0207));
+        nearbyHotels = nearbyHotels(1L, "Matterhorn View Hotel");
+
+        tools.searchNearbyHotels("quiet hotel", "Zermatt", 10.0, 350.0);
+
+        assertEquals(new NearbyHotelCall(7.7491, 46.0207, 10.0, 2.0, 350.0), nearbyHotelCall);
     }
 
     @Test
@@ -138,15 +161,27 @@ class TravelToolsTest {
     }
 
     @Test
-    void nearbyActivitySearchUsesRepositoryProjectionDirectly() {
+    void nearbyActivitySearchUsesGeneratedVectorAndLocationQuery() {
         destinations.add(destination(2L, "Interlaken", 7.8632, 46.6863));
-        nearbyActivities = List.of(new NearbyActivitySearchResult(
-            20L, 2L, "Lake Brienz Kayaking", "Summer", "Paddle on turquoise water", 0.08));
+        nearbyActivities = SearchResults.of(List.of(new SearchResult<>(
+            activity(2L, "Lake Brienz Kayaking"), new Score(0.08))));
 
         String result = tools.searchNearbyActivities("scenic water activities", "Interlaken", 40.0);
 
         assertTrue(result.contains("Lake Brienz Kayaking"));
-        assertEquals(new NearbyActivityCall(7.8632, 46.6863, 40.0), nearbyActivityCall);
+        assertEquals(new NearbyActivityCall(7.8632, 46.6863, 40.0, 2.0), nearbyActivityCall);
+    }
+
+    @Test
+    void wishlistUsesDetailsAlreadyLoadedByRepository() {
+        wishlistItems = List.of(
+            new WishlistItem(1L, "hotel", 10L, "Matterhorn View Hotel", "CHF 240 / night"),
+            new WishlistItem(2L, "activity", 20L, "Lake Brienz Kayaking", "Summer"));
+
+        String result = tools.getWishlist("demo-conversation");
+
+        assertTrue(result.contains("Matterhorn View Hotel - CHF 240 / night"));
+        assertTrue(result.contains("Lake Brienz Kayaking (Summer)"));
     }
 
     private DestinationEntity destination(Long id, String name, double longitude, double latitude) {
@@ -157,8 +192,14 @@ class TravelToolsTest {
         return new HotelEntity(10L, destinationId, name, 240.0, "A comfortable hotel", null, null);
     }
 
-    private NearbyHotelSearchResult nearbyHotel(Long destinationId, String name) {
-        return new NearbyHotelSearchResult(10L, destinationId, name, 240.0, "A comfortable hotel", 0.1);
+    private ActivityEntity activity(Long destinationId, String name) {
+        return new ActivityEntity(
+            20L, destinationId, name, "Summer", "Paddle on turquoise water", null, null);
+    }
+
+    private SearchResults<HotelEntity> nearbyHotels(Long destinationId, String name) {
+        return SearchResults.of(List.of(
+            new SearchResult<>(hotel(destinationId, name), new Score(0.1))));
     }
 
     @SuppressWarnings("unchecked")
@@ -182,9 +223,18 @@ class TravelToolsTest {
         Object call(String method, Object[] arguments);
     }
 
-    private record NearbyHotelCall(double longitude, double latitude, double radiusKm, Double maxPrice) {
+    private record NearbyHotelCall(
+            double longitude,
+            double latitude,
+            double radiusKm,
+            double maxDistance,
+            Double maxPrice) {
     }
 
-    private record NearbyActivityCall(double longitude, double latitude, double radiusKm) {
+    private record NearbyActivityCall(
+            double longitude,
+            double latitude,
+            double radiusKm,
+            double maxDistance) {
     }
 }

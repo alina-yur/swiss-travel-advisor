@@ -22,7 +22,7 @@ Here’s what we will build:
 
 - A Micronaut web app that exposes a `/api/chat` endpoint  
 - On startup, it loads a dataset with travel destinations, hotels, activities
-- Each entry gets a vector embedding generated from its description
+- Each entry gets a vector embedding generated from its searchable content
 - Vectors are stored in Oracle AI Database right next to the application data
 - At query time, we embed the user question the same way, and run similarity search
 - The LLM proposes which tools to call, while LangChain4j handles execution and message routing.
@@ -222,7 +222,7 @@ In this case LangChain4j will handle the function calling protocol with OpenAI: 
 
 ## Vector Search with Oracle AI Database
 
-Oracle AI Database supports native vector columns, so you can store embeddings alongside regular relational data. In our schema, all entity tables — destinations, hotels, and activities — include a `description_embedding` column: a 1536-dimensional vector, matching the output of OpenAI's `text-embedding-3-small` model.
+Oracle AI Database supports native vector columns, so you can store embeddings alongside regular relational data. In our schema, all entity tables — destinations, hotels, and activities — include a `content_embedding` column: a 1536-dimensional vector, matching the output of OpenAI's `text-embedding-3-small` model.
 
 When a user sends a request, the application embeds that query and passes the resulting vector to the database. Oracle's `VECTOR_DISTANCE` function evaluates cosine distance and orders results by similarity, returning the top matches.
 

@@ -17,7 +17,7 @@ public interface DestinationRepository extends CrudRepository<DestinationEntity,
 
     double MAX_COSINE_DISTANCE = 2.0;
 
-    List<DestinationEntity> findTop5ByDescriptionEmbeddingNear(Vector embedding, Double maxDistance);
+    List<DestinationEntity> findTop5ByContentEmbeddingNear(Vector embedding, Double maxDistance);
 
     List<DestinationEntity> findTop5ByLocationNear(Point point, double distance);
 
@@ -32,9 +32,9 @@ public interface DestinationRepository extends CrudRepository<DestinationEntity,
                    d.name,
                    d.region,
                    d.description,
-                   VECTOR_DISTANCE(d.description_embedding, :embedding, COSINE) AS vector_distance
+                   VECTOR_DISTANCE(d.content_embedding, :embedding, COSINE) AS vector_distance
             FROM destinations d
-            WHERE d.description_embedding IS NOT NULL
+            WHERE d.content_embedding IS NOT NULL
               AND d.location IS NOT NULL
               AND SDO_WITHIN_DISTANCE(
                     d.location,
@@ -58,10 +58,10 @@ public interface DestinationRepository extends CrudRepository<DestinationEntity,
         double radiusKm
     );
 
-    List<DestinationEntity> findByDescriptionEmbeddingIsNull();
+    List<DestinationEntity> findByContentEmbeddingIsNull();
 
     Optional<DestinationEntity> findByNameEqualsIgnoreCase(String name);
 
-    @Query(value = "UPDATE destinations SET description_embedding = :embedding WHERE id = :id", nativeQuery = true)
-    void updateDescriptionEmbedding(Long id, Vector embedding);
+    @Query(value = "UPDATE destinations SET content_embedding = :embedding WHERE id = :id", nativeQuery = true)
+    void updateContentEmbedding(Long id, Vector embedding);
 }

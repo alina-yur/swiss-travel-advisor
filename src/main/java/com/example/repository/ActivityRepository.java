@@ -13,9 +13,9 @@ import java.util.List;
 @JdbcRepository(dialect = Dialect.ORACLE)
 public interface ActivityRepository extends CrudRepository<ActivityEntity, Long> {
 
-    List<ActivityEntity> findTop5ByDescriptionEmbeddingNear(Vector embedding, Double maxDistance);
+    List<ActivityEntity> findTop5ByContentEmbeddingNear(Vector embedding, Double maxDistance);
 
-    List<ActivityEntity> findTop5ByDestinationIdAndDescriptionEmbeddingNear(Long destinationId, Vector embedding, Double maxDistance);
+    List<ActivityEntity> findTop5ByDestinationIdAndContentEmbeddingNear(Long destinationId, Vector embedding, Double maxDistance);
 
     @Query(value = """
         SELECT a.id,
@@ -24,7 +24,7 @@ public interface ActivityRepository extends CrudRepository<ActivityEntity, Long>
                a.season,
                a.description
         FROM activities a
-        WHERE a.description_embedding IS NOT NULL
+        WHERE a.content_embedding IS NOT NULL
           AND a.location IS NOT NULL
           AND SDO_WITHIN_DISTANCE(
                 a.location,
@@ -37,7 +37,7 @@ public interface ActivityRepository extends CrudRepository<ActivityEntity, Long>
                 ),
                 'distance=' || :radiusKm || ' unit=KM'
               ) = 'TRUE'
-        ORDER BY VECTOR_DISTANCE(a.description_embedding, :embedding, COSINE)
+        ORDER BY VECTOR_DISTANCE(a.content_embedding, :embedding, COSINE)
         FETCH FIRST 5 ROWS ONLY
         """, nativeQuery = true)
     List<NearbyActivitySearchResult> searchTop5ByEmbeddingNearLocation(
@@ -47,8 +47,8 @@ public interface ActivityRepository extends CrudRepository<ActivityEntity, Long>
         double radiusKm
     );
 
-    List<ActivityEntity> findByDescriptionEmbeddingIsNull();
+    List<ActivityEntity> findByContentEmbeddingIsNull();
 
-    @Query(value = "UPDATE activities SET description_embedding = :embedding WHERE id = :id", nativeQuery = true)
-    void updateDescriptionEmbedding(Long id, Vector embedding);
+    @Query(value = "UPDATE activities SET content_embedding = :embedding WHERE id = :id", nativeQuery = true)
+    void updateContentEmbedding(Long id, Vector embedding);
 }

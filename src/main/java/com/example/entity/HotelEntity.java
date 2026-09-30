@@ -25,7 +25,7 @@ public record HotelEntity(
     // Exact search is intentional for the small demo catalog. At scale, add an
     // Oracle IVF or HNSW index through Flyway and use approximate top-K search.
     @Nullable
-    FloatVector descriptionEmbedding,
+    FloatVector contentEmbedding,
 
     @Nullable
     @Srid(4326)

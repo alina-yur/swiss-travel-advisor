@@ -26,7 +26,7 @@ public class EmbeddingBackfillRepository {
     }
 
     public List<DestinationEmbeddingSeed> findDestinationsWithoutEmbedding() {
-        String sql = "SELECT id, name, region, description FROM destinations WHERE description_embedding IS NULL";
+        String sql = "SELECT id, name, region, description FROM destinations WHERE content_embedding IS NULL";
         List<DestinationEmbeddingSeed> results = new ArrayList<>();
         try (Connection conn = dataSource.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql);
@@ -50,7 +50,7 @@ public class EmbeddingBackfillRepository {
             SELECT h.id, h.name, h.description, d.name AS destination_name
             FROM hotels h
             JOIN destinations d ON h.destination_id = d.id
-            WHERE h.description_embedding IS NULL
+            WHERE h.content_embedding IS NULL
             """;
         List<HotelEmbeddingSeed> results = new ArrayList<>();
         try (Connection conn = dataSource.getConnection();
@@ -75,7 +75,7 @@ public class EmbeddingBackfillRepository {
             SELECT a.id, a.name, a.season, a.description, d.name AS destination_name
             FROM activities a
             JOIN destinations d ON a.destination_id = d.id
-            WHERE a.description_embedding IS NULL
+            WHERE a.content_embedding IS NULL
             """;
         List<ActivityEmbeddingSeed> results = new ArrayList<>();
         try (Connection conn = dataSource.getConnection();
@@ -109,7 +109,7 @@ public class EmbeddingBackfillRepository {
     }
 
     private void updateEmbedding(String tableName, Long id, float[] embedding) {
-        String sql = "UPDATE " + tableName + " SET description_embedding = ? WHERE id = ?";
+        String sql = "UPDATE " + tableName + " SET content_embedding = ? WHERE id = ?";
         try (Connection conn = dataSource.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
             stmt.setObject(1, embedding, OracleType.VECTOR);

@@ -1,0 +1,19 @@
+cells:
+  - kind: 1
+    value: |-
+      # Swiss Travel Advisor
+
+      Attach the **MT ADB Alina Production** connection, then run the SQL cell.
+    languageId: markdown
+  - kind: 2
+    value: |-
+      SELECT d.name AS destination,
+             h.name AS hotel,
+             h.price_per_night
+      FROM hotels h
+      JOIN destinations d
+        ON d.id = h.destination_id
+      WHERE d.name = 'Lucerne'
+        AND h.price_per_night <= 400
+      ORDER BY h.price_per_night;
+    languageId: oracle-sql

@@ -13,17 +13,17 @@ import java.util.List;
 @JdbcRepository(dialect = Dialect.ORACLE)
 public interface HotelRepository extends CrudRepository<HotelEntity, Long> {
 
-    List<HotelEntity> findTop5ByDescriptionEmbeddingNear(Vector embedding, Double maxDistance);
+    List<HotelEntity> findTop5ByContentEmbeddingNear(Vector embedding, Double maxDistance);
 
-    List<HotelEntity> findTop5ByDestinationIdAndDescriptionEmbeddingNear(Long destinationId, Vector embedding, Double maxDistance);
+    List<HotelEntity> findTop5ByDestinationIdAndContentEmbeddingNear(Long destinationId, Vector embedding, Double maxDistance);
 
-    List<HotelEntity> findTop5ByPricePerNightLessThanEqualsAndDescriptionEmbeddingNear(
+    List<HotelEntity> findTop5ByPricePerNightLessThanEqualsAndContentEmbeddingNear(
         Double maxPrice,
         Vector embedding,
         Double maxDistance
     );
 
-    List<HotelEntity> findTop5ByDestinationIdAndPricePerNightLessThanEqualsAndDescriptionEmbeddingNear(
+    List<HotelEntity> findTop5ByDestinationIdAndPricePerNightLessThanEqualsAndContentEmbeddingNear(
         Long destinationId,
         Double maxPrice,
         Vector embedding,
@@ -37,7 +37,7 @@ public interface HotelRepository extends CrudRepository<HotelEntity, Long> {
                h.price_per_night,
                h.description
         FROM hotels h
-        WHERE h.description_embedding IS NOT NULL
+        WHERE h.content_embedding IS NOT NULL
           AND h.location IS NOT NULL
           AND (:maxPrice IS NULL OR h.price_per_night <= :maxPrice)
           AND SDO_WITHIN_DISTANCE(
@@ -51,7 +51,7 @@ public interface HotelRepository extends CrudRepository<HotelEntity, Long> {
                 ),
                 'distance=' || :radiusKm || ' unit=KM'
               ) = 'TRUE'
-        ORDER BY VECTOR_DISTANCE(h.description_embedding, :embedding, COSINE)
+        ORDER BY VECTOR_DISTANCE(h.content_embedding, :embedding, COSINE)
         FETCH FIRST 5 ROWS ONLY
         """, nativeQuery = true)
     List<NearbyHotelSearchResult> searchTop5ByEmbeddingNearLocation(
@@ -62,8 +62,8 @@ public interface HotelRepository extends CrudRepository<HotelEntity, Long> {
         Double maxPrice
     );
 
-    List<HotelEntity> findByDescriptionEmbeddingIsNull();
+    List<HotelEntity> findByContentEmbeddingIsNull();
 
-    @Query(value = "UPDATE hotels SET description_embedding = :embedding WHERE id = :id", nativeQuery = true)
-    void updateDescriptionEmbedding(Long id, Vector embedding);
+    @Query(value = "UPDATE hotels SET content_embedding = :embedding WHERE id = :id", nativeQuery = true)
+    void updateContentEmbedding(Long id, Vector embedding);
 }

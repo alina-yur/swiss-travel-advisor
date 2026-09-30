@@ -69,7 +69,7 @@ public class TravelTools {
         List<DestinationEntity> results = observability.traceRetriever(
                 "Oracle destination vector search",
                 parameters("entity.type", "destination", "max_distance", MAX_COSINE_DISTANCE),
-                () -> destinationRepository.findTop5ByDescriptionEmbeddingNear(queryVector, MAX_COSINE_DISTANCE));
+                () -> destinationRepository.findTop5ByContentEmbeddingNear(queryVector, MAX_COSINE_DISTANCE));
         if (results.isEmpty()) {
             return "No destinations found matching: " + query;
         }
@@ -132,16 +132,16 @@ public class TravelTools {
                         "max_price_chf", effectiveMaxPrice, "max_distance", MAX_COSINE_DISTANCE),
                 () -> {
                     if (effectiveDestinationId != null && effectiveMaxPrice != null) {
-                        return hotelRepository.findTop5ByDestinationIdAndPricePerNightLessThanEqualsAndDescriptionEmbeddingNear(
+                        return hotelRepository.findTop5ByDestinationIdAndPricePerNightLessThanEqualsAndContentEmbeddingNear(
                                 effectiveDestinationId, effectiveMaxPrice, queryVector, MAX_COSINE_DISTANCE);
                     } else if (effectiveDestinationId != null) {
-                        return hotelRepository.findTop5ByDestinationIdAndDescriptionEmbeddingNear(
+                        return hotelRepository.findTop5ByDestinationIdAndContentEmbeddingNear(
                                 effectiveDestinationId, queryVector, MAX_COSINE_DISTANCE);
                     } else if (effectiveMaxPrice != null) {
-                        return hotelRepository.findTop5ByPricePerNightLessThanEqualsAndDescriptionEmbeddingNear(
+                        return hotelRepository.findTop5ByPricePerNightLessThanEqualsAndContentEmbeddingNear(
                                 effectiveMaxPrice, queryVector, MAX_COSINE_DISTANCE);
                     }
-                    return hotelRepository.findTop5ByDescriptionEmbeddingNear(queryVector, MAX_COSINE_DISTANCE);
+                    return hotelRepository.findTop5ByContentEmbeddingNear(queryVector, MAX_COSINE_DISTANCE);
                 });
         if (results.isEmpty()) {
             return "No hotels found matching: " + query;
@@ -209,8 +209,8 @@ public class TravelTools {
                 parameters("entity.type", "activity", "destination_id", effectiveDestinationId,
                         "max_distance", MAX_COSINE_DISTANCE),
                 () -> effectiveDestinationId == null
-                        ? activityRepository.findTop5ByDescriptionEmbeddingNear(queryVector, MAX_COSINE_DISTANCE)
-                        : activityRepository.findTop5ByDestinationIdAndDescriptionEmbeddingNear(
+                        ? activityRepository.findTop5ByContentEmbeddingNear(queryVector, MAX_COSINE_DISTANCE)
+                        : activityRepository.findTop5ByDestinationIdAndContentEmbeddingNear(
                                 effectiveDestinationId, queryVector, MAX_COSINE_DISTANCE));
         if (results.isEmpty()) {
             return "No activities found matching: " + query;

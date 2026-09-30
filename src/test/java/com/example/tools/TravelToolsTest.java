@@ -117,7 +117,7 @@ class TravelToolsTest {
         String result = tools.searchHotels("recommended hotels in Zurich", 0L, 0.0);
 
         assertTrue(result.contains("Zurich Old Town Boutique"));
-        assertEquals("findTop5ByDescriptionEmbeddingNear", genericHotelMethod);
+        assertEquals("findTop5ByContentEmbeddingNear", genericHotelMethod);
         assertEquals(2.0, genericHotelDistance);
     }
 

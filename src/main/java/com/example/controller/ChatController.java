@@ -49,8 +49,7 @@ public class ChatController {
 
     @Get(uri = "/conversations/{conversationId}", produces = MediaType.APPLICATION_JSON)
     public OracleChatMemoryStore.ConversationDetail conversation(@PathVariable String conversationId) {
-        String id = normalizeConversationId(conversationId);
-        OracleChatMemoryStore.ConversationDetail conversation = chatMemoryStore.getConversation(id);
+        OracleChatMemoryStore.ConversationDetail conversation = chatMemoryStore.getConversation(conversationId);
         if (conversation == null) {
             throw new HttpStatusException(HttpStatus.NOT_FOUND, "Conversation not found");
         }
@@ -61,7 +60,7 @@ public class ChatController {
     public record ChatRequest(String message, @Nullable String conversationId) {}
 
     @Serdeable
-    public record ChatReply(String conversationId, String message) {}
+    public record ChatReply(String conversationId, String message, @Nullable String spanId) {}
 
     @Post(uri = "/chat", consumes = MediaType.APPLICATION_JSON, produces = MediaType.APPLICATION_JSON)
     public ChatReply chat(@Body ChatRequest req) {
@@ -84,11 +83,11 @@ public class ChatController {
         String conversationId = normalizeConversationId(requestedConversationId);
         Object lock = conversationLocks[Math.floorMod(conversationId.hashCode(), conversationLocks.length)];
         synchronized (lock) {
-            String reply = observability.traceAgentTurn(
+            AiObservability.AgentTurn turn = observability.traceAgentTurn(
                     conversationId,
                     message,
                     () -> assistant.chat(conversationId, message));
-            return new ChatReply(conversationId, reply);
+            return new ChatReply(conversationId, turn.output(), turn.spanId());
         }
     }
 

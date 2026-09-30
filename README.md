@@ -251,6 +251,12 @@ selection, vector and spatial retrieval, prompts, responses, token usage, and
 errors in one trace. Conversation IDs are propagated as `session.id`, so
 multi-turn conversations also appear in the Sessions tab.
 
+Retriever spans include the ranked Oracle results using OpenInference
+`retrieval.documents` attributes. Each document carries its catalog ID,
+display content, cosine-similarity score, rank, and raw cosine distance.
+New assistant responses also show thumbs-up/down controls; feedback is
+published to the corresponding `AGENT` span as a Phoenix `HUMAN` annotation.
+
 Generate a curated set of traces with:
 
 ```bash

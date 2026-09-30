@@ -72,7 +72,7 @@ async function sendMessage(message) {
     const reply = await response.json();
     currentConversationId = reply.conversationId;
     typing.remove();
-    appendMessage("assistant", reply.message);
+    appendMessage("assistant", reply.message, false, reply.spanId);
     await Promise.allSettled([loadConversations(), loadWishlist()]);
   } catch (error) {
     typing.remove();
@@ -176,14 +176,14 @@ function wishlistItem(item) {
   return row;
 }
 
-function appendMessage(role, content, isError = false) {
-  const row = messageNode(role, content, isError);
+function appendMessage(role, content, isError = false, spanId = null) {
+  const row = messageNode(role, content, isError, spanId);
   elements.messages.append(row);
   scrollToLatest();
   return row;
 }
 
-function messageNode(role, content, isError = false) {
+function messageNode(role, content, isError = false, spanId = null) {
   const row = document.createElement("article");
   row.className = `message-row ${role}${isError ? " error" : ""}`;
   if (role === "assistant") row.append(textElement("span", "S", "message-avatar"));
@@ -194,8 +194,59 @@ function messageNode(role, content, isError = false) {
   } else {
     body.textContent = content ?? "";
   }
-  row.append(body);
+  if (role === "assistant") {
+    const stack = document.createElement("div");
+    stack.className = "message-stack";
+    stack.append(body);
+    if (!isError && spanId) stack.append(feedbackControls(spanId));
+    row.append(stack);
+  } else {
+    row.append(body);
+  }
   return row;
+}
+
+function feedbackControls(spanId) {
+  const controls = document.createElement("div");
+  controls.className = "message-feedback";
+  controls.setAttribute("aria-label", "Rate this response");
+  const status = textElement("span", "", "feedback-status");
+
+  for (const [helpful, glyph, label] of [[true, "👍", "Helpful"], [false, "👎", "Not helpful"]]) {
+    const button = textElement("button", glyph);
+    button.type = "button";
+    button.title = label;
+    button.setAttribute("aria-label", label);
+    button.setAttribute("aria-pressed", "false");
+    button.addEventListener("click", () => submitFeedback(controls, status, spanId, helpful));
+    controls.append(button);
+  }
+  controls.append(status);
+  return controls;
+}
+
+async function submitFeedback(controls, status, spanId, helpful) {
+  const buttons = [...controls.querySelectorAll("button")];
+  buttons.forEach(button => { button.disabled = true; });
+  status.textContent = "Saving…";
+  try {
+    const response = await fetch("/api/feedback", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ spanId, helpful })
+    });
+    if (!response.ok) throw new Error(await errorMessage(response));
+    buttons.forEach((button, index) => {
+      const selected = index === (helpful ? 0 : 1);
+      button.classList.toggle("selected", selected);
+      button.setAttribute("aria-pressed", String(selected));
+    });
+    status.textContent = "Thanks";
+  } catch (error) {
+    status.textContent = error.message || "Could not save";
+  } finally {
+    buttons.forEach(button => { button.disabled = false; });
+  }
 }
 
 // Render the small, predictable Markdown subset used by the travel assistant.

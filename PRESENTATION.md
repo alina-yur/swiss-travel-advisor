@@ -2,18 +2,6 @@
 
 ---
 
-### Stack
-
-- Micronaut — lightweight JVM framework with compile-time dependency injection
-- GraalVM — native-image compilation
-- LangChain4j — LLM orchestration and tool calling
-- Oracle Database — vector storage and similarity search
-- OpenAI — models for chat and embeddings
-
-
----
-
-
 ## Application
 
 - Web app with a `/api/chat` endpoint.
@@ -21,6 +9,16 @@
 - Database stores vectors beside the source data.
 - Each question is embedded and searched against the catalog.
 - OpenAI selects tools; LangChain4j routes calls and messages.
+
+---
+
+### Stack
+
+- GraalVM — native-image compilation
+- Micronaut — lightweight JVM framework with compile-time dependency injection
+- LangChain4j — LLM orchestration and tool calling
+- Oracle Database — vector storage and similarity search
+- OpenAI — models for chat and embeddings
 
 ---
 
@@ -146,50 +144,12 @@ findByLocationNear(point, distance)
 SDO_WITHIN_DISTANCE(...)
 ```
 
-This demo uses explicit SQL only where vector ranking, spatial distance, and an optional price filter must be composed in one statement.
-
-Code: [HotelEntity.java](src/main/java/com/example/entity/HotelEntity.java)
+[HotelEntity.java](src/main/java/com/example/entity/HotelEntity.java)
 
 ---
 
-## Vector search can read like a sentence
-
-```java
-@JdbcRepository(dialect = Dialect.ORACLE)          // Oracle SQL and type handling
-interface HotelRepository {
-
-    List<HotelEntity>
-    findTop5ByPricePerNightLessThanEqualsAndContentEmbeddingNear(
-        Double maxPrice,                            // hard price limit
-        Vector queryEmbedding,                      // semantic query
-        Double maxDistance                         // similarity threshold
-    );
-}
-```
-
-Micronaut Data parses and validates this repository method during compilation; `Top5` bounds the semantically ranked result.
-
-Code: [HotelRepository.java](src/main/java/com/example/repository/HotelRepository.java)
 
 ---
-
-## The centerpiece: one Oracle query
-
-```sql
-SELECT name, price_per_night, description
-FROM hotels
-WHERE price_per_night <= :max_price                         -- hard price filter
-  AND SDO_WITHIN_DISTANCE(location, :lucerne,               -- radius filter
-        'distance=' || :radius_km || ' unit=KM') = 'TRUE'
-ORDER BY VECTOR_DISTANCE(content_embedding,                 -- semantic ranking
-                         :query_vector, COSINE)
-FETCH FIRST 5 ROWS ONLY;                                    -- bounded model context
-```
-
-Code: [HotelRepository.java](src/main/java/com/example/repository/HotelRepository.java)
-
----
-
 
 
 

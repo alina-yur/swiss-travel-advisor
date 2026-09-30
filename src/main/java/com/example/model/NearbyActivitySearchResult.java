@@ -11,6 +11,7 @@ public record NearbyActivitySearchResult(
     Long destinationId,
     String name,
     String season,
-    String description
+    String description,
+    double vectorDistance
 ) {
 }

@@ -3,13 +3,14 @@ package com.example.tools;
 import com.example.entity.ActivityEntity;
 import com.example.entity.DestinationEntity;
 import com.example.entity.HotelEntity;
+import com.example.model.NearbyActivitySearchResult;
+import com.example.model.NearbyHotelSearchResult;
 import com.example.model.WishlistItem;
 import com.example.model.DestinationSearchResult;
 import com.example.observability.AiObservability;
 import com.example.repository.ActivityRepository;
 import com.example.repository.DestinationRepository;
 import com.example.repository.HotelRepository;
-import com.example.repository.SpatialSearchRepository;
 import com.example.repository.WishlistRepository;
 import com.example.service.EmbeddingService;
 import dev.langchain4j.agent.tool.Tool;
@@ -36,7 +37,6 @@ public class TravelTools {
     private final DestinationRepository destinationRepository;
     private final HotelRepository hotelRepository;
     private final ActivityRepository activityRepository;
-    private final SpatialSearchRepository spatialSearchRepository;
     private final WishlistRepository wishlistRepository;
     private final AiObservability observability;
 
@@ -45,7 +45,6 @@ public class TravelTools {
         DestinationRepository destinationRepository,
         HotelRepository hotelRepository,
         ActivityRepository activityRepository,
-        SpatialSearchRepository spatialSearchRepository,
         WishlistRepository wishlistRepository,
         AiObservability observability
     ) {
@@ -53,7 +52,6 @@ public class TravelTools {
         this.destinationRepository = destinationRepository;
         this.hotelRepository = hotelRepository;
         this.activityRepository = activityRepository;
-        this.spatialSearchRepository = spatialSearchRepository;
         this.wishlistRepository = wishlistRepository;
         this.observability = observability;
     }
@@ -69,7 +67,8 @@ public class TravelTools {
         List<DestinationEntity> results = observability.traceRetriever(
                 "Oracle destination vector search",
                 parameters("entity.type", "destination", "max_distance", MAX_COSINE_DISTANCE),
-                () -> destinationRepository.findTop5ByContentEmbeddingNear(queryVector, MAX_COSINE_DISTANCE));
+                () -> destinationRepository.findTop5ByContentEmbeddingNear(queryVector, MAX_COSINE_DISTANCE),
+                destination -> destinationDocument(destination, cosineDistance(queryVector, destination.contentEmbedding())));
         if (results.isEmpty()) {
             return "No destinations found matching: " + query;
         }
@@ -100,7 +99,8 @@ public class TravelTools {
                 "Oracle destination vector + spatial search",
                 parameters("entity.type", "destination", "location", nearDestinationName, "radius_km", radius),
                 () -> destinationRepository.searchTop5ByEmbeddingNearLocation(
-                        queryVector, point.x(), point.y(), radius));
+                        queryVector, point.x(), point.y(), radius),
+                destination -> destinationDocument(destination, destination.vectorDistance()));
 
         if (results.isEmpty()) {
             return "No destinations found within " + radius + " km of " + nearDestinationName + " matching: " + query;
@@ -142,7 +142,8 @@ public class TravelTools {
                                 effectiveMaxPrice, queryVector, MAX_COSINE_DISTANCE);
                     }
                     return hotelRepository.findTop5ByContentEmbeddingNear(queryVector, MAX_COSINE_DISTANCE);
-                });
+                },
+                hotel -> hotelDocument(hotel, cosineDistance(queryVector, hotel.contentEmbedding())));
         if (results.isEmpty()) {
             return "No hotels found matching: " + query;
         }
@@ -171,18 +172,19 @@ public class TravelTools {
         Point point = location.get();
         Vector queryVector = embedding(query, "hotels");
         Double effectiveMaxPrice = positiveOrNull(maxPrice);
-        List<HotelEntity> results = observability.traceRetriever(
+        List<NearbyHotelSearchResult> results = observability.traceRetriever(
                 "Oracle hotel vector + spatial search",
                 parameters("entity.type", "hotel", "location", nearDestinationName,
                         "radius_km", radius, "max_price_chf", effectiveMaxPrice),
-                () -> spatialSearchRepository.searchHotelsByVectorNear(
-                        queryVector, point.x(), point.y(), radius, effectiveMaxPrice));
+                () -> hotelRepository.searchTop5ByEmbeddingNearLocation(
+                        queryVector, point.x(), point.y(), radius, effectiveMaxPrice),
+                hotel -> hotelDocument(hotel, hotel.vectorDistance()));
 
         if (results.isEmpty()) {
             return "No hotels found within " + radius + " km of " + nearDestinationName + " matching: " + query;
         }
         StringBuilder sb = new StringBuilder("Found nearby hotels:\n");
-        for (HotelEntity h : results) {
+        for (NearbyHotelSearchResult h : results) {
             sb.append(String.format("- %s (ID:%d, %s, CHF %.0f/night): %s\n",
                 h.name(),
                 h.id(),
@@ -211,7 +213,8 @@ public class TravelTools {
                 () -> effectiveDestinationId == null
                         ? activityRepository.findTop5ByContentEmbeddingNear(queryVector, MAX_COSINE_DISTANCE)
                         : activityRepository.findTop5ByDestinationIdAndContentEmbeddingNear(
-                                effectiveDestinationId, queryVector, MAX_COSINE_DISTANCE));
+                                effectiveDestinationId, queryVector, MAX_COSINE_DISTANCE),
+                activity -> activityDocument(activity, cosineDistance(queryVector, activity.contentEmbedding())));
         if (results.isEmpty()) {
             return "No activities found matching: " + query;
         }
@@ -238,17 +241,18 @@ public class TravelTools {
         double radius = radiusOrDefault(radiusKm, DEFAULT_ACTIVITY_RADIUS_KM);
         Point point = location.get();
         Vector queryVector = embedding(query, "activities");
-        List<ActivityEntity> results = observability.traceRetriever(
+        List<NearbyActivitySearchResult> results = observability.traceRetriever(
                 "Oracle activity vector + spatial search",
                 parameters("entity.type", "activity", "location", nearDestinationName, "radius_km", radius),
-                () -> spatialSearchRepository.searchActivitiesByVectorNear(
-                        queryVector, point.x(), point.y(), radius));
+                () -> activityRepository.searchTop5ByEmbeddingNearLocation(
+                        queryVector, point.x(), point.y(), radius),
+                activity -> activityDocument(activity, activity.vectorDistance()));
 
         if (results.isEmpty()) {
             return "No activities found within " + radius + " km of " + nearDestinationName + " matching: " + query;
         }
         StringBuilder sb = new StringBuilder("Found nearby activities:\n");
-        for (ActivityEntity a : results) {
+        for (NearbyActivitySearchResult a : results) {
             sb.append(String.format("- %s (ID:%d, %s, %s): %s\n",
                 a.name(),
                 a.id(),
@@ -383,6 +387,108 @@ public class TravelTools {
 
     private Double positiveOrNull(Double value) {
         return value == null || value <= 0 ? null : value;
+    }
+
+    private AiObservability.RetrievalDocument destinationDocument(
+            DestinationEntity destination,
+            Double vectorDistance) {
+        return retrievalDocument(
+                "destination",
+                destination.id(),
+                destination.name() + " (" + destination.region() + "): " + destination.description(),
+                vectorDistance,
+                parameters("region", destination.region()));
+    }
+
+    private AiObservability.RetrievalDocument destinationDocument(
+            DestinationSearchResult destination,
+            Double vectorDistance) {
+        return retrievalDocument(
+                "destination",
+                destination.id(),
+                destination.name() + " (" + destination.region() + "): " + destination.description(),
+                vectorDistance,
+                parameters("region", destination.region()));
+    }
+
+    private AiObservability.RetrievalDocument hotelDocument(HotelEntity hotel, Double vectorDistance) {
+        return retrievalDocument(
+                "hotel",
+                hotel.id(),
+                hotel.name() + " (CHF " + Math.round(hotel.pricePerNight()) + "/night): " + hotel.description(),
+                vectorDistance,
+                parameters("destination_id", hotel.destinationId(), "price_chf", hotel.pricePerNight()));
+    }
+
+    private AiObservability.RetrievalDocument hotelDocument(
+            NearbyHotelSearchResult hotel,
+            Double vectorDistance) {
+        return retrievalDocument(
+                "hotel",
+                hotel.id(),
+                hotel.name() + " (CHF " + Math.round(hotel.pricePerNight()) + "/night): " + hotel.description(),
+                vectorDistance,
+                parameters("destination_id", hotel.destinationId(), "price_chf", hotel.pricePerNight()));
+    }
+
+    private AiObservability.RetrievalDocument activityDocument(ActivityEntity activity, Double vectorDistance) {
+        return retrievalDocument(
+                "activity",
+                activity.id(),
+                activity.name() + " (" + activity.season() + "): " + activity.description(),
+                vectorDistance,
+                parameters("destination_id", activity.destinationId(), "season", activity.season()));
+    }
+
+    private AiObservability.RetrievalDocument activityDocument(
+            NearbyActivitySearchResult activity,
+            Double vectorDistance) {
+        return retrievalDocument(
+                "activity",
+                activity.id(),
+                activity.name() + " (" + activity.season() + "): " + activity.description(),
+                vectorDistance,
+                parameters("destination_id", activity.destinationId(), "season", activity.season()));
+    }
+
+    private AiObservability.RetrievalDocument retrievalDocument(
+            String entityType,
+            Long id,
+            String content,
+            Double vectorDistance,
+            Map<String, Object> details) {
+        Map<String, Object> metadata = new LinkedHashMap<>();
+        metadata.put("entity_type", entityType);
+        if (vectorDistance != null) {
+            metadata.put("cosine_distance", vectorDistance);
+        }
+        metadata.putAll(details);
+        Double score = vectorDistance == null ? null : Math.max(-1.0, Math.min(1.0, 1.0 - vectorDistance));
+        return new AiObservability.RetrievalDocument(entityType + ":" + id, content, score, metadata);
+    }
+
+    private Double cosineDistance(Vector queryVector, Vector contentVector) {
+        if (queryVector == null || contentVector == null) {
+            return null;
+        }
+        float[] query = queryVector.toFloatArray();
+        float[] content = contentVector.toFloatArray();
+        if (query.length == 0 || query.length != content.length) {
+            return null;
+        }
+        double dotProduct = 0;
+        double queryNorm = 0;
+        double contentNorm = 0;
+        for (int index = 0; index < query.length; index++) {
+            dotProduct += query[index] * content[index];
+            queryNorm += query[index] * query[index];
+            contentNorm += content[index] * content[index];
+        }
+        if (queryNorm == 0 || contentNorm == 0) {
+            return null;
+        }
+        double similarity = dotProduct / (Math.sqrt(queryNorm) * Math.sqrt(contentNorm));
+        return 1.0 - Math.max(-1.0, Math.min(1.0, similarity));
     }
 
     private Map<String, Object> parameters(Object... namesAndValues) {

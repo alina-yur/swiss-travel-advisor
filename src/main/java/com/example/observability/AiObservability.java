@@ -12,11 +12,13 @@ import jakarta.inject.Singleton;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Function;
 import java.util.function.Supplier;
 
 /** Creates the OpenInference span hierarchy used by the conference demo. */
@@ -48,12 +50,13 @@ public final class AiObservability {
         this.embeddingModelName = embeddingModelName;
     }
 
-    public String traceAgentTurn(String conversationId, String input, Supplier<String> operation) {
+    public AgentTurn traceAgentTurn(String conversationId, String input, Supplier<String> operation) {
         if (!enabled) {
-            return operation.get();
+            return new AgentTurn(operation.get(), null);
         }
 
         Span span = tracer.spanBuilder("Swiss Travel Advisor")
+                .setNoParent()
                 .setSpanKind(SpanKind.INTERNAL)
                 .startSpan();
         TurnState state = new TurnState(conversationId, input);
@@ -73,7 +76,7 @@ public final class AiObservability {
             }
             span.setStatus(StatusCode.OK);
             annotationPublisher.publish(span.getSpanContext().getSpanId(), evaluations);
-            return output;
+            return new AgentTurn(output, span.getSpanContext().getSpanId());
         } catch (RuntimeException error) {
             recordError(span, error);
             throw error;
@@ -132,6 +135,14 @@ public final class AiObservability {
             String name,
             Map<String, ?> attributes,
             Supplier<List<T>> operation) {
+        return traceRetriever(name, attributes, operation, null);
+    }
+
+    public <T> List<T> traceRetriever(
+            String name,
+            Map<String, ?> attributes,
+            Supplier<List<T>> operation,
+            Function<T, RetrievalDocument> documentMapper) {
         if (!enabled) {
             return operation.get();
         }
@@ -150,6 +161,9 @@ public final class AiObservability {
             // document objects. A nested `.count` attribute makes Phoenix
             // deserialize that field as an object and breaks its retriever UI.
             span.setAttribute("retrieval.result_count", results.size());
+            if (documentMapper != null) {
+                setRetrievalDocuments(span, results, documentMapper);
+            }
             span.setStatus(StatusCode.OK);
             return results;
         } catch (RuntimeException error) {
@@ -251,6 +265,30 @@ public final class AiObservability {
         }
     }
 
+    private <T> void setRetrievalDocuments(
+            Span span,
+            List<T> results,
+            Function<T, RetrievalDocument> documentMapper) {
+        for (int index = 0; index < results.size(); index++) {
+            RetrievalDocument document = documentMapper.apply(results.get(index));
+            if (document == null) {
+                continue;
+            }
+            String prefix = "retrieval.documents." + index + ".document.";
+            setIfPresent(span, prefix + "id", document.id());
+            setIfPresent(span, prefix + "score", document.score());
+            if (includeContent) {
+                setIfPresent(span, prefix + "content", document.content());
+                Map<String, Object> metadata = new LinkedHashMap<>();
+                metadata.put("rank", index + 1);
+                if (document.metadata() != null) {
+                    document.metadata().forEach(metadata::put);
+                }
+                setIfPresent(span, prefix + "metadata", toJson(metadata));
+            }
+        }
+    }
+
     private String toJson(Object value) {
         try {
             return objectMapper.writeValueAsString(value);
@@ -280,6 +318,12 @@ public final class AiObservability {
     public String currentSessionId() {
         TurnState state = turnState.get();
         return state == null ? null : state.sessionId;
+    }
+
+    public record AgentTurn(String output, String spanId) {
+    }
+
+    public record RetrievalDocument(String id, String content, Double score, Map<String, ?> metadata) {
     }
 
     private void applySession(Span span) {

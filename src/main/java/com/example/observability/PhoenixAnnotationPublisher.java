@@ -49,22 +49,41 @@ public final class PhoenixAnnotationPublisher {
         // persist the span before attempting the annotation, especially when
         // the application is under light load during a live demo.
         CompletableFuture.delayedExecutor(5, TimeUnit.SECONDS)
-                .execute(() -> send(spanId, evaluations, true));
+                .execute(() -> send(spanId, evaluations, "CODE", "conference-demo", true));
     }
 
-    private void send(String spanId, List<Evaluation> evaluations, boolean retry) {
+    public void publishUserFeedback(String spanId, boolean helpful) {
+        if (!enabled || spanId == null || spanId.isBlank()) {
+            return;
+        }
+        Evaluation feedback = new Evaluation(
+                "user_feedback",
+                helpful ? "helpful" : "not_helpful",
+                helpful ? 1.0 : 0.0,
+                helpful ? "The user marked this response as helpful."
+                        : "The user marked this response as not helpful.");
+        CompletableFuture.delayedExecutor(2, TimeUnit.SECONDS)
+                .execute(() -> send(spanId, List.of(feedback), "HUMAN", "travel-advisor-ui", true));
+    }
+
+    private void send(
+            String spanId,
+            List<Evaluation> evaluations,
+            String annotatorKind,
+            String identifier,
+            boolean retry) {
         try {
             List<Map<String, Object>> annotations = evaluations.stream()
                     .map(evaluation -> Map.<String, Object>of(
                             "name", evaluation.name(),
-                            "annotator_kind", "CODE",
+                            "annotator_kind", annotatorKind,
                             "span_id", spanId,
                             "result", Map.of(
                                     "label", evaluation.label(),
                                     "score", evaluation.score(),
                                     "explanation", evaluation.explanation()),
                             "metadata", Map.of("source", "swiss-travel-advisor"),
-                            "identifier", "conference-demo"))
+                            "identifier", identifier))
                     .toList();
             String body = objectMapper.writeValueAsString(Map.of("data", annotations));
             HttpRequest.Builder request = HttpRequest.newBuilder(annotationsUri)
@@ -78,7 +97,7 @@ public final class PhoenixAnnotationPublisher {
             HttpResponse<Void> response = httpClient.send(request.build(), HttpResponse.BodyHandlers.discarding());
             if (response.statusCode() >= 300 && retry) {
                 CompletableFuture.delayedExecutor(5, TimeUnit.SECONDS)
-                        .execute(() -> send(spanId, evaluations, false));
+                        .execute(() -> send(spanId, evaluations, annotatorKind, identifier, false));
             } else if (response.statusCode() >= 300) {
                 LOG.debug("Could not publish Phoenix annotations for span {}: HTTP {}", spanId, response.statusCode());
             }
@@ -88,7 +107,7 @@ public final class PhoenixAnnotationPublisher {
             }
             if (retry) {
                 CompletableFuture.delayedExecutor(5, TimeUnit.SECONDS)
-                        .execute(() -> send(spanId, evaluations, false));
+                        .execute(() -> send(spanId, evaluations, annotatorKind, identifier, false));
             } else {
                 LOG.debug("Could not publish Phoenix annotations for span {}", spanId, error);
             }

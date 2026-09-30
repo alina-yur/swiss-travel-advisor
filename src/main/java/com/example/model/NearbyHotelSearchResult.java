@@ -11,6 +11,7 @@ public record NearbyHotelSearchResult(
     Long destinationId,
     String name,
     Double pricePerNight,
-    String description
+    String description,
+    double vectorDistance
 ) {
 }

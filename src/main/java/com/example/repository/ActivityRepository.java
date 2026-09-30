@@ -22,7 +22,8 @@ public interface ActivityRepository extends CrudRepository<ActivityEntity, Long>
                a.destination_id,
                a.name,
                a.season,
-               a.description
+               a.description,
+               VECTOR_DISTANCE(a.content_embedding, :embedding, COSINE) AS vector_distance
         FROM activities a
         WHERE a.content_embedding IS NOT NULL
           AND a.location IS NOT NULL
@@ -37,7 +38,7 @@ public interface ActivityRepository extends CrudRepository<ActivityEntity, Long>
                 ),
                 'distance=' || :radiusKm || ' unit=KM'
               ) = 'TRUE'
-        ORDER BY VECTOR_DISTANCE(a.content_embedding, :embedding, COSINE)
+        ORDER BY vector_distance
         FETCH FIRST 5 ROWS ONLY
         """, nativeQuery = true)
     List<NearbyActivitySearchResult> searchTop5ByEmbeddingNearLocation(

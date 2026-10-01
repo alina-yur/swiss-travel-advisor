@@ -228,6 +228,12 @@ public final class AiObservability {
 
     private String expectedSearchTool(String input) {
         String normalized = input.toLowerCase(Locale.ROOT);
+        boolean searchIntent = hasAny(normalized,
+                "find", "search", "recommend", "suggest", "show", "looking for", "look for", "where can i");
+        if (!searchIntent) {
+            return null;
+        }
+
         boolean nearby = hasAny(normalized, " near ", " around ", " within ", " in zermatt", " in interlaken",
                 " in lucerne", " in lausanne", " in st. moritz", " in lugano", " in zurich");
         if (hasAny(normalized, "hotel", "accommodation", "stay")) {

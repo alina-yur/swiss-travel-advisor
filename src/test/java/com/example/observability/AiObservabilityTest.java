@@ -19,6 +19,7 @@ import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class AiObservabilityTest {
@@ -126,6 +127,52 @@ class AiObservabilityTest {
         provider.close();
     }
 
+    @Test
+    void evaluatesToolSelectionOnlyForExplicitSearchRequests() {
+        CollectingSpanExporter exporter = new CollectingSpanExporter();
+        SdkTracerProvider provider = SdkTracerProvider.builder()
+                .addSpanProcessor(SimpleSpanProcessor.create(exporter))
+                .build();
+        OpenTelemetrySdk openTelemetry = OpenTelemetrySdk.builder()
+                .setTracerProvider(provider)
+                .build();
+        PhoenixAnnotationPublisher publisher = new PhoenixAnnotationPublisher(
+                ObjectMapper.getDefault(), false, "http://localhost:6006", "");
+        AiObservability observability = new AiObservability(
+                openTelemetry,
+                ObjectMapper.getDefault(),
+                publisher,
+                true,
+                true,
+                "text-embedding-3-small");
+
+        observability.traceAgentTurn(
+                "conversation-search",
+                "Find a hotel near Lucerne",
+                () -> observability.traceTool("searchNearbyHotels", Map.of(), () -> "Found Hotel A"));
+        observability.traceAgentTurn(
+                "conversation-wishlist",
+                "Save the first hotel to my wishlist",
+                () -> observability.traceTool("addToWishlist", Map.of(), () -> "Saved Hotel A"));
+        observability.traceAgentTurn(
+                "conversation-follow-up",
+                "Tell me more about that hotel",
+                () -> "It is beside the lake.");
+        observability.traceAgentTurn("conversation-greeting", "Hello", () -> "Grüezi");
+
+        SpanData search = agentSpanForInput(exporter.spans, "Find a hotel near Lucerne");
+        assertEquals(1.0, search.getAttributes().get(
+                AttributeKey.doubleKey("evaluation.tool_selection.score")));
+
+        assertNull(agentSpanForInput(exporter.spans, "Save the first hotel to my wishlist")
+                .getAttributes().get(AttributeKey.doubleKey("evaluation.tool_selection.score")));
+        assertNull(agentSpanForInput(exporter.spans, "Tell me more about that hotel")
+                .getAttributes().get(AttributeKey.doubleKey("evaluation.tool_selection.score")));
+        assertNull(agentSpanForInput(exporter.spans, "Hello")
+                .getAttributes().get(AttributeKey.doubleKey("evaluation.tool_selection.score")));
+        provider.close();
+    }
+
     private static SpanData span(List<SpanData> spans, String name) {
         return spans.stream()
                 .filter(span -> span.getName().equals(name))
@@ -135,6 +182,14 @@ class AiObservabilityTest {
 
     private static String attribute(SpanData span, String name) {
         return span.getAttributes().get(AttributeKey.stringKey(name));
+    }
+
+    private static SpanData agentSpanForInput(List<SpanData> spans, String input) {
+        return spans.stream()
+                .filter(span -> span.getName().equals("Swiss Travel Advisor"))
+                .filter(span -> input.equals(attribute(span, "input.value")))
+                .findFirst()
+                .orElseThrow();
     }
 
     private static final class CollectingSpanExporter implements SpanExporter {

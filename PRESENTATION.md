@@ -8,7 +8,7 @@
 - Startup loads destinations, hotels, and activities, then generates embeddings.
 - Database stores vectors beside the source data.
 - Each question is embedded and searched against the catalog.
-- OpenAI selects tools; LangChain4j routes calls and messages.
+- AI provider selects tools; LangChain4j routes calls and messages.
 
 ---
 
@@ -35,9 +35,8 @@
 
 ---
 
-## Web aplication
+## Web application
 
-Micronaut turns the idea into a normal Java application:
 
 - `@Controller` exposes the HTTP API.
 - `@AiService` creates the assistant implementation.
@@ -46,7 +45,32 @@ Micronaut turns the idea into a normal Java application:
 
 ---
 
-## The assistant is just an interface
+## Embeddings in this application
+
+At startup, `DataInitializer` generates embeddings only for catalog rows where
+`content_embedding` is missing:
+
+```java
+String text = hotel.name()
+    + " in " + hotel.destinationName()
+    + ". " + hotel.description();
+
+float[] embedding = embeddingService.generateEmbedding(text);
+```
+
+- Each embedding is stored in Oracle as a vector of 1,536 numbers.
+- Destinations embed name, region, and description; activities also include season.
+- At search time, the tool embeds the user's preference with the same service and
+  the database ranks matches by cosine distance.
+
+The destination name gives the embedding context. Price and geographic
+coordinates remain structured fields for exact filtering.
+
+Code: [DataInitializer.java](src/main/java/com/example/service/DataInitializer.java) · [EmbeddingService.java](src/main/java/com/example/service/EmbeddingService.java)
+
+---
+
+## The assistant is an interface
 
 ```java
 @AiService(tools = TravelTools.class)
@@ -72,7 +96,7 @@ LangChain4j manages model and tool calls.
 public String searchNearbyHotels(
     String query,
     String nearDestinationName,
-    Double radiusKm,    // default or user-specified
+    Double radiusKm,  
     Double maxPrice
 ) {
     return doSearchNearbyHotels(
@@ -86,19 +110,6 @@ Code: [TravelTools.java](src/main/java/com/example/tools/TravelTools.java)
 
 ---
 
-## Storing embeddings beside the factual information
-
-```sql
-CREATE TABLE hotels (
-    id                    NUMBER PRIMARY KEY,
-    destination_id        NUMBER NOT NULL,
-    price_per_night       NUMBER(10, 2) NOT NULL,
-    description           CLOB NOT NULL,
-    content_embedding     VECTOR(1536, FLOAT32)
-);
-```
-
----
 
 ## The Java model tells the same story
 
@@ -106,20 +117,15 @@ CREATE TABLE hotels (
 @MappedEntity("hotels")
 public record HotelEntity(
     Long id,
-    Double pricePerNight,              // exact filter
+    Double pricePerNight,         
     String description,
-    FloatVector contentEmbedding,  // semantic ranking
-    @Srid(4326) Point location          // geographic filter
+    FloatVector contentEmbedding, 
+    @Srid(4326) Point location       
 ) {}
 ```
 
-```text
-Hotel
-├── price: CHF 240
-├── description: "quiet hotel beside the lake"
-├── content embedding: numbers representing the searchable text
-└── location: a point on a map
-```
+
+
 
 The description is the original text. The content embedding is a numeric representation generated from the name, destination, and description for similarity search.
 
@@ -149,9 +155,10 @@ searchTop5ByContentEmbeddingNearAndLocationNearAndPricePerNightLessThanEquals(
 );
 ```
 
-Micronaut Data generates the cosine ranking, `SDO_WITHIN_DISTANCE`, price
-predicate, and top-five limit at compile time. No handwritten hotel search SQL
-is required.
+From this method name, Micronaut Data generates the Oracle query at compile
+time. At runtime, Oracle applies cosine ranking, the geographic radius, and the
+price limit, then returns the top five results. No handwritten SQL is needed
+for this search.
 
 At a high level, Micronaut Data reads the repository method name during
 compilation, validates its properties and parameter types, and generates the
@@ -183,50 +190,7 @@ the geographic radius and maximum-price constraints before returning the five
 closest matches. The SQL above is intentionally abbreviated; the generated
 class contains the complete dialect-specific statement and parameter mapping.
 
-[HotelRepository.java](src/main/java/com/example/repository/HotelRepository.java) · [HotelEntity.java](src/main/java/com/example/entity/HotelEntity.java)
-
----
-
-
----
-
-
-
-## A practical embedding strategy
-
-```java
-String text = hotel.name()
-    + " in " + hotel.destinationName()
-    + ". " + hotel.description();
-
-float[] embedding = embeddingService.generateEmbedding(text);
-```
-
-Embed descriptive content that changes slowly.
-
-Do not embed current price, wishlist state, permissions, or geographic radius. Those values remain exact and queryable.
-
-In practice, also store the embedding model, dimensions, source hash, and generation time so vectors can be refreshed safely.
-
-Code: [DataInitializer.java](src/main/java/com/example/service/DataInitializer.java)
-
----
-
-## Memory is real application data
-
-```java
-return MessageWindowChatMemory.builder()
-    .id(memoryId)                       // conversation boundary
-    .maxMessages(20)                    // bounded context
-    .chatMemoryStore(oracleStore)       // survives restart
-    .build();
-```
-
-Conversation history is serialized into Oracle. The wishlist uses the same conversation ID, so dialogue and saved state stay aligned.
-
-Code: [OracleChatMemoryProvider.java](src/main/java/com/example/memory/OracleChatMemoryProvider.java) · [OracleChatMemoryStore.java](src/main/java/com/example/memory/OracleChatMemoryStore.java)
-
----
+[Combined hotel search](src/main/java/com/example/tools/TravelTools.java#L171)
 
 ---
 
@@ -269,6 +233,30 @@ These scores are **pass rates for simple checks**, not model confidence scores.
 | `user_feedback` | Did users who submitted feedback mark the answer as helpful? |
 | `wishlist_permission` | Did the application avoid changing the wishlist without an explicit request? |
 
+---
+
+## How the expected tool is chosen
+
+`tool_selection` uses a small, demo-specific keyword rule:
+
+- First require a search cue such as `find`, `search`, `recommend`, `suggest`,
+  `show`, or `looking for`
+- Then use `hotel`, `activity`, or `destination` terms to choose the type of search
+- `near`, `around`, `within`, or a supported city → expect the nearby version
+
+For example:
+
+- “Find a hotel near Lucerne” → `searchNearbyHotels`
+- “Show activities” → `searchActivities`
+- “Save the first hotel to my wishlist” → no search-tool score
+- “Hello” → no expected tool and no `tool_selection` score
+
+The rule evaluates the model's choice; it does not control which tool the model calls.
+
+---
+
+## Interpreting the dashboard
+
 For the example dashboard:
 
 ```text
@@ -299,10 +287,6 @@ conclusion from the average.
 
 Code: [AiObservability.java](src/main/java/com/example/observability/AiObservability.java) · [PhoenixAnnotationPublisher.java](src/main/java/com/example/observability/PhoenixAnnotationPublisher.java)
 
----
-
-# What is especially interesting in Micronaut 5.2?
-
 
 ---
 
@@ -316,35 +300,14 @@ Code: [AiObservability.java](src/main/java/com/example/observability/AiObservabi
 
 ---
 
-
-## GraalVM gives us a build X-ray
-
-```xml
-<profile>
-  <id>native-report</id>
-  <buildArg>--emit=build-report</buildArg>
-  <buildArg>-H:+ReportDynamicAccess</buildArg>
-</profile>
-```
-
-The report shows what went into the binary: reachable code, resources, reflection, and image size contributors.
-
-That is more useful than guessing why a native image is large or why a dynamic code path is missing.
-
-Run with `-Pnative-report` when using a GraalVM distribution that supports build reports.
-
----
-
-
----
-
 ## Takeaways
 
-1. Generate embeddings from stable descriptive content.
-2. Keep price, location, and business constraints as queryable data.
-3. Combine embedding-based search with exact price and location filters in one database query.
-4. Use Micronaut Data and LangChain4j for typed repositories, AI services, and tools.
-5. Use GraalVM Native Image to reduce application startup overhead and memory usage.
-
+— Use embeddings to capture meaning, and keep factual data queryable.
+— Combine semantic relevance with exact business constraints.
+- Give the model controlled access through explicit AI-service interfaces and well-defined tool parameters.
+-  Use compile-time dependency injection and data access to reduce runtime overhead.
+- Give conversation memory and user state explicit, durable boundaries.
+- Trace and evaluate model behavior so you can measure and improve it.
+-  Use GraalVM Native Image for fast startup, reduced memory footprint, and compact deployment.
 
 ---

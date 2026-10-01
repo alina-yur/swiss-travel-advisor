@@ -32,7 +32,6 @@ public class TravelTools {
     private static final double DEFAULT_DESTINATION_RADIUS_KM = 50.0;
     private static final double DEFAULT_HOTEL_RADIUS_KM = 15.0;
     private static final double DEFAULT_ACTIVITY_RADIUS_KM = 40.0;
-    // price_per_night is NUMBER(10, 2), so this is the largest storable value.
     private static final double UNBOUNDED_HOTEL_PRICE = 99_999_999.99;
 
     private final EmbeddingService embeddingService;
@@ -156,7 +155,12 @@ public class TravelTools {
         return sb.toString();
     }
 
-    @Tool("Search for hotels by preference near a location anchor. Supported anchors: Zermatt, Interlaken, Lucerne, Lausanne, St. Moritz, Lugano, Zurich. Pass maxPrice in CHF/night, or 0 when the user gives no budget. radiusKm defaults to 15.")
+   @Tool("""
+    Search for hotels matching a preference near a named destination in the catalog.
+    Use when the user specifies a location such as 'in', 'near', 'around', or 'within'.
+    radiusKm is in kilometers and defaults to 15.
+    maxPrice is in CHF per night; use 0 when no budget is specified.
+    """)
     public String searchNearbyHotels(String query, String nearDestinationName, Double radiusKm, Double maxPrice) {
         return observability.traceTool("searchNearbyHotels", parameters(
                         "query", query, "nearDestinationName", nearDestinationName,

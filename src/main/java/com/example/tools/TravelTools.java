@@ -67,7 +67,7 @@ public class TravelTools {
         Vector queryVector = embedding(query, "destinations");
         List<DestinationEntity> results = observability.traceRetriever(
                 "Oracle destination vector search",
-                parameters("entity.type", "destination", "max_distance", MAX_COSINE_DISTANCE),
+                parameters("query", query, "entity.type", "destination", "max_distance", MAX_COSINE_DISTANCE),
                 () -> destinationRepository.findTop5ByContentEmbeddingNear(queryVector, MAX_COSINE_DISTANCE),
                 destination -> destinationDocument(destination, cosineDistance(queryVector, destination.contentEmbedding())));
         if (results.isEmpty()) {
@@ -98,7 +98,8 @@ public class TravelTools {
         Vector queryVector = embedding(query, "destinations");
         List<DestinationSearchResult> results = observability.traceRetriever(
                 "Oracle destination vector + spatial search",
-                parameters("entity.type", "destination", "location", nearDestinationName, "radius_km", radius),
+                parameters("query", query, "entity.type", "destination", "location", nearDestinationName,
+                        "radius_km", radius),
                 () -> destinationRepository.searchTop5ByEmbeddingNearLocation(
                         queryVector, point.x(), point.y(), radius),
                 destination -> destinationDocument(destination, destination.vectorDistance()));
@@ -129,7 +130,7 @@ public class TravelTools {
         List<HotelEntity> results;
         results = observability.traceRetriever(
                 "Oracle hotel vector search",
-                parameters("entity.type", "hotel", "destination_id", effectiveDestinationId,
+                parameters("query", query, "entity.type", "hotel", "destination_id", effectiveDestinationId,
                         "max_price_chf", effectiveMaxPrice, "max_distance", MAX_COSINE_DISTANCE),
                 () -> {
                     if (effectiveDestinationId != null && effectiveMaxPrice != null) {
@@ -180,7 +181,7 @@ public class TravelTools {
         Double effectiveMaxPrice = positiveOrNull(maxPrice);
         List<SearchResult<HotelEntity>> results = observability.traceRetriever(
                 "Oracle hotel vector + spatial search",
-                parameters("entity.type", "hotel", "location", nearDestinationName,
+                parameters("query", query, "entity.type", "hotel", "location", nearDestinationName,
                         "radius_km", radius, "max_price_chf", effectiveMaxPrice),
                 () -> hotelRepository
                         .searchTop5ByContentEmbeddingNearAndLocationNearAndPricePerNightLessThanEquals(
@@ -221,7 +222,7 @@ public class TravelTools {
         Long effectiveDestinationId = positiveOrNull(destinationId);
         List<ActivityEntity> results = observability.traceRetriever(
                 "Oracle activity vector search",
-                parameters("entity.type", "activity", "destination_id", effectiveDestinationId,
+                parameters("query", query, "entity.type", "activity", "destination_id", effectiveDestinationId,
                         "max_distance", MAX_COSINE_DISTANCE),
                 () -> effectiveDestinationId == null
                         ? activityRepository.findTop5ByContentEmbeddingNear(queryVector, MAX_COSINE_DISTANCE)
@@ -256,7 +257,8 @@ public class TravelTools {
         Vector queryVector = embedding(query, "activities");
         List<SearchResult<ActivityEntity>> results = observability.traceRetriever(
                 "Oracle activity vector + spatial search",
-                parameters("entity.type", "activity", "location", nearDestinationName, "radius_km", radius),
+                parameters("query", query, "entity.type", "activity", "location", nearDestinationName,
+                        "radius_km", radius),
                 () -> activityRepository.searchTop5ByContentEmbeddingNearAndLocationNear(
                         queryVector, new Score(MAX_COSINE_DISTANCE), point, radius * 1_000).results(),
                 result -> activityDocument(result.entity(), result.score().value()));

@@ -110,70 +110,64 @@ Code: [TravelTools.java](src/main/java/com/example/tools/TravelTools.java)
 
 ---
 
+## From user language to one database search
 
-## The Java model tells the same story
+```text
+"Find a relaxing spa hotel near Lucerne under CHF 300"
+    ↓ language model
+searchNearbyHotels(
+    query = "relaxing spa hotel",
+    nearDestinationName = "Lucerne",
+    radiusKm = 15,
+    maxPrice = 300
+)
+    ↓ application
+Oracle vector + spatial + price search
+```
+
+The model maps the sentence to typed tool arguments; the application decides
+how each argument is executed:
+
+| Argument | Role in the search |
+|---|---|
+| `query` | Embedded for semantic similarity |
+| `nearDestinationName` | Resolved to geographic coordinates |
+| `radiusKm` | Applied as an exact spatial limit |
+| `maxPrice` | Applied as an exact numeric limit |
+
+
+---
+
+## Java types preserve the search intent
+
+The catalog stores both source data and database-native search values:
 
 ```java
-@MappedEntity("hotels")
 public record HotelEntity(
-    Long id,
-    Double pricePerNight,         
+    Double pricePerNight,
     String description,
-    FloatVector contentEmbedding, 
-    @Srid(4326) Point location       
+    FloatVector contentEmbedding,
+    @Srid(4326) Point location
 ) {}
 ```
 
 
+At request time, the query embedding is compared with those stored catalog
+embeddings. Price and location stay structured instead of being approximated
+inside the embedding.
+
+---
+
+## One repository method combines the search
 
 
-The description is the original text. The content embedding is a numeric representation generated from the name, destination, and description for similarity search.
+[Combined hotel search](src/main/java/com/example/tools/TravelTools.java#L171)
 
-Activity embeddings also include the season.
+---
 
-Micronaut Data maps application-level vector and geometry types to database-native values. `@Srid(4326)` makes the coordinate system explicit.
+## Oracle performs the combined search
 
-In this project:
-
-```text
-FloatVector → VECTOR
-Point       → SDO_GEOMETRY
-```
-
-For example, `FloatVector contentEmbedding` maps to `content_embedding VECTOR(1536, FLOAT32)`, while `@Srid(4326) Point location` maps to an Oracle `MDSYS.SDO_GEOMETRY` value.
-
-It can also translate spatial repository names into Oracle operations:
-
-```java
-SearchResults<HotelEntity>
-searchTop5ByContentEmbeddingNearAndLocationNearAndPricePerNightLessThanEquals(
-    Vector embedding,
-    Score maxDistance,
-    Point location,
-    double radiusMeters,
-    Double maxPrice
-);
-```
-
-From this method name, Micronaut Data generates the Oracle query at compile
-time. At runtime, Oracle applies cosine ranking, the geographic radius, and the
-price limit, then returns the top five results. No handwritten SQL is needed
-for this search.
-
-At a high level, Micronaut Data reads the repository method name during
-compilation, validates its properties and parameter types, and generates the
-Oracle query implementation. There is no runtime method-name parsing.
-
-```text
-HotelRepository.java
-        ↓ compile time
-target/classes/com/example/repository/
-    $HotelRepository$Intercepted$Definition$Exec.class
-        ↓ runtime
-Oracle AI Database
-```
-
-Conceptually, the generated query is:
+Conceptually, the generated operation is:
 
 ```sql
 SELECT ..., VECTOR_DISTANCE(...) AS mn_score
@@ -185,10 +179,10 @@ ORDER BY VECTOR_DISTANCE(content_embedding, ?, COSINE)
 FETCH NEXT 5 ROWS ONLY
 ```
 
-The generated implementation performs semantic ranking while Oracle applies
-the geographic radius and maximum-price constraints before returning the five
-closest matches. The SQL above is intentionally abbreviated; the generated
-class contains the complete dialect-specific statement and parameter mapping.
+Oracle applies the geographic radius and price ceiling before returning the
+five best semantic matches. The SQL is abbreviated; Micronaut Data's generated
+implementation supplies the complete dialect-specific statement and parameter
+mapping.
 
 [Combined hotel search](src/main/java/com/example/tools/TravelTools.java#L171)
 
@@ -216,76 +210,20 @@ Code: [TravelAdvisorChatModelLogger.java](src/main/java/com/example/logging/Trav
 
 ---
 
-## Reading annotation scores
+## Read one AI trace in Phoenix
 
-These scores are **pass rates for simple checks**, not model confidence scores.
-
-```text
-0.00 = the check failed for every evaluated trace
-1.00 = the check passed for every evaluated trace
-0.83 = the check passed for 83% of evaluated traces
-```
-
-| Annotation | Simple meaning |
-|---|---|
-| `response_present` | Did the assistant return a non-empty answer? |
-| `tool_selection` | Did it call the search tool expected for that request? |
-| `user_feedback` | Did users who submitted feedback mark the answer as helpful? |
-| `wishlist_permission` | Did the application avoid changing the wishlist without an explicit request? |
-
----
-
-## How the expected tool is chosen
-
-`tool_selection` uses a small, demo-specific keyword rule:
-
-- First require a search cue such as `find`, `search`, `recommend`, `suggest`,
-  `show`, or `looking for`
-- Then use `hotel`, `activity`, or `destination` terms to choose the type of search
-- `near`, `around`, `within`, or a supported city → expect the nearby version
-
-For example:
-
-- “Find a hotel near Lucerne” → `searchNearbyHotels`
-- “Show activities” → `searchActivities`
-- “Save the first hotel to my wishlist” → no search-tool score
-- “Hello” → no expected tool and no `tool_selection` score
-
-The rule evaluates the model's choice; it does not control which tool the model calls.
-
----
-
-## Interpreting the dashboard
-
-For the example dashboard:
+Each user message is one `AGENT` trace. Choose a **search request** such as
+“Find a quiet lakeside hotel near Lucerne under CHF 250,” then expand
+**`tool searchNearbyHotels`**:
 
 ```text
-response_present     1.00  Every evaluated request received an answer.
-tool_selection       0.83  The expected tool was used 83% of the time.
-user_feedback        1.00  All submitted ratings in this period were positive.
-wishlist_permission  1.00  No unauthorized wishlist change was detected.
+AGENT: Swiss Travel Advisor
+├── LLM: model chooses a tool
+├── TOOL: searchNearbyHotels
+│   ├── EMBEDDING: turn the preference into a vector
+│   └── RETRIEVER: Oracle vector + spatial search
+└── LLM: model writes the answer from the tool result
 ```
-
-### How to explain it on stage
-
-> “These lines turn important application behavior into measurable checks. A
-> score of one means every evaluated trace passed. Tool selection is at 0.83,
-> so that is the line I would investigate: I can open the failing trace and see
-> the user request, the tool the model chose, and the tool our rule expected.”
-
-Only traces that have a particular annotation contribute to that annotation's
-average. For example, `user_feedback = 1.00` means all **submitted ratings**
-were positive; it does not mean every user submitted feedback. Likewise,
-`response_present = 1.00` confirms that answers were returned, not that every
-answer was correct.
-
-The code-based checks are intentionally deterministic and easy to explain.
-`tool_selection` uses demo-specific keyword rules, so a low score can indicate
-either a model/tool-routing problem or a rule that needs refinement. Open the
-individual trace and read its annotation explanation before drawing a
-conclusion from the average.
-
-Code: [AiObservability.java](src/main/java/com/example/observability/AiObservability.java) · [PhoenixAnnotationPublisher.java](src/main/java/com/example/observability/PhoenixAnnotationPublisher.java)
 
 
 ---
@@ -303,11 +241,11 @@ Code: [AiObservability.java](src/main/java/com/example/observability/AiObservabi
 ## Takeaways
 
 — Use embeddings to capture meaning, and keep factual data queryable.
-— Combine semantic relevance with exact business constraints.
+— Combine semantic relevance with harrd business constraints.
 - Give the model controlled access through explicit AI-service interfaces and well-defined tool parameters.
--  Use compile-time dependency injection and data access to reduce runtime overhead.
+- Use compile-time dependency injection and data access to reduce runtime overhead.
 - Give conversation memory and user state explicit, durable boundaries.
 - Trace and evaluate model behavior so you can measure and improve it.
--  Use GraalVM Native Image for fast startup, reduced memory footprint, and compact deployment.
+- Use GraalVM Native Image for fast startup, reduced memory footprint, and compact deployment.
 
 ---

@@ -53,7 +53,7 @@ class AiObservabilityTest {
                             observability.traceEmbedding("hotels", () -> new float[]{1.0f, 2.0f});
                             observability.traceRetriever(
                                     "Oracle hotel vector + spatial search",
-                                    Map.of("entity.type", "hotel", "radius_km", 15.0),
+                                    Map.of("query", "hotels", "entity.type", "hotel", "radius_km", 15.0),
                                     () -> List.of("Hotel A"),
                                     result -> new AiObservability.RetrievalDocument(
                                             "hotel:1",
@@ -82,6 +82,8 @@ class AiObservabilityTest {
         assertEquals(tool.getSpanId(), embedding.getParentSpanId());
         assertEquals(tool.getSpanId(), retriever.getParentSpanId());
         assertEquals(1L, retriever.getAttributes().get(AttributeKey.longKey("retrieval.result_count")));
+        assertEquals("hotels", attribute(retriever, "input.value"));
+        assertEquals("text/plain", attribute(retriever, "input.mime_type"));
         assertEquals("hotel:1", attribute(retriever, "retrieval.documents.0.document.id"));
         assertEquals("Hotel A", attribute(retriever, "retrieval.documents.0.document.content"));
         assertEquals(0.875, retriever.getAttributes().get(

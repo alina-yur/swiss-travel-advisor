@@ -48,12 +48,7 @@
     </dependency>
     <dependency>
       <groupId>io.micronaut.tracing</groupId>
-      <artifactId>micronaut-tracing-opentelemetry-http</artifactId>
-      <scope>compile</scope>
-    </dependency>
-    <dependency>
-      <groupId>io.micronaut.tracing</groupId>
-      <artifactId>micronaut-tracing-opentelemetry-jdbc</artifactId>
+      <artifactId>micronaut-tracing-opentelemetry</artifactId>
       <scope>compile</scope>
     </dependency>
     <dependency>

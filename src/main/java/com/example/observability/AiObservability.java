@@ -155,6 +155,10 @@ public final class AiObservability {
         span.setAttribute("db.system", "oracle");
         span.setAttribute("retrieval.operation", "vector_search");
         attributes.forEach((key, value) -> setIfPresent(span, "retrieval." + key, value));
+        Object query = attributes.get("query");
+        if (query != null) {
+            setContent(span, "input", query.toString(), TEXT_MIME_TYPE);
+        }
         try (Scope ignored = span.makeCurrent()) {
             List<T> results = operation.get();
             // OpenInference reserves retrieval.documents for an array of

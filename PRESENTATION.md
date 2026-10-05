@@ -2,6 +2,8 @@
 
 ---
 
+Smart travel advisor based on semantic search and grounded in real data.
+
 ## Application
 
 - Web app with a `/api/chat` endpoint.
@@ -22,7 +24,7 @@
 
 ---
 
-## One user request can result in three different searches
+## One user request combines three search criteria
 
 > “Recommend a quiet lakeside hotel near Lucerne under CHF 250”
 
@@ -45,31 +47,6 @@
 
 ---
 
-## Embeddings in this application
-
-At startup, `DataInitializer` generates embeddings only for catalog rows where
-`content_embedding` is missing:
-
-```java
-String text = hotel.name()
-    + " in " + hotel.destinationName()
-    + ". " + hotel.description();
-
-float[] embedding = embeddingService.generateEmbedding(text);
-```
-
-- Each embedding is stored in Oracle as a vector of 1,536 numbers.
-- Destinations embed name, region, and description; activities also include season.
-- At search time, the tool embeds the user's preference with the same service and
-  the database ranks matches by cosine distance.
-
-The destination name gives the embedding context. Price and geographic
-coordinates remain structured fields for exact filtering.
-
-Code: [DataInitializer.java](src/main/java/com/example/service/DataInitializer.java) · [EmbeddingService.java](src/main/java/com/example/service/EmbeddingService.java)
-
----
-
 ## The assistant is an interface
 
 ```java
@@ -89,14 +66,36 @@ LangChain4j manages model and tool calls.
 
 ---
 
-## A tool is a safe doorway into the application
+## Embeddings in this application
+
+At startup, `DataInitializer` generates embeddings only for catalog rows where
+`content_embedding` is missing:
+
+```java
+String text = hotel.name()
+    + " in " + hotel.destinationName()
+    + ". " + hotel.description();
+
+float[] embedding = embeddingService.generateEmbedding(text);
+```
+
+- Each embedding is stored in Oracle as a vector of 1,536 numbers.
+- Destinations embed name, region, and description.
+- At search time, the tool embeds the user's preference with the same service and the database ranks matches by cosine distance.
+
+
+Code: [DataInitializer.java](src/main/java/com/example/service/DataInitializer.java) · [EmbeddingService.java](src/main/java/com/example/service/EmbeddingService.java)
+
+---
+
+## Use tools for predefined and constrained actions
 
 ```java
 @Tool("Search for hotels by preference near a location anchor")
 public String searchNearbyHotels(
     String query,
     String nearDestinationName,
-    Double radiusKm,  
+    Double radiusKm,
     Double maxPrice
 ) {
     return doSearchNearbyHotels(
@@ -110,62 +109,42 @@ Code: [TravelTools.java](src/main/java/com/example/tools/TravelTools.java)
 
 ---
 
-## From user language to one database search
+## From user request to database search
 
-```text
-"Find a relaxing spa hotel near Lucerne under CHF 300"
-    ↓ language model
-searchNearbyHotels(
-    query = "relaxing spa hotel",
-    nearDestinationName = "Lucerne",
-    radiusKm = 15,
-    maxPrice = 300
-)
-    ↓ application
-Oracle vector + spatial + price search
-```
-
-The model maps the sentence to typed tool arguments; the application decides
-how each argument is executed:
-
-| Argument | Role in the search |
+| Component | Responsibility |
 |---|---|
-| `query` | Embedded for semantic similarity |
-| `nearDestinationName` | Resolved to geographic coordinates |
-| `radiusKm` | Applied as an exact spatial limit |
-| `maxPrice` | Applied as an exact numeric limit |
-
+| Application | Handles user interaction and passes the user’s input and relevant context to the LLM |
+| LLM | Interprets the request, selects a tool, and supplies structured arguments |
+| LangChain4j | Maps arguments to Java parameters, invokes the tool, and returns its result to the LLM |
+| `TravelTools` | Validates, normalizes, resolves, and converts the arguments |
+| Repository | Declares the combined search for Micronaut Data to implement |
+| Database | Applies vector, location, and price constraints, then ranks the matches |
 
 ---
 
-## Java types preserve the search intent
+## The tool prepares database-ready inputs
 
-The catalog stores both source data and database-native search values:
+For "quiet hotel near Lucerne within 15 km under CHF 250", the tool:
 
-```java
-public record HotelEntity(
-    Double pricePerNight,
-    String description,
-    FloatVector contentEmbedding,
-    @Srid(4326) Point location
-) {}
-```
+- Embeds `"quiet hotel"` as a query vector.
+- Resolves `"Lucerne"` to its stored geographic coordinates.
+- Normalizes optional values and applies defaults when needed.
+- Calls one repository method that combines semantic, spatial, and price criteria.
+- Formats the returned hotel entities as text for the LLM.
 
-
-At request time, the query embedding is compared with those stored catalog
-embeddings. Price and location stay structured instead of being approximated
-inside the embedding.
+The LLM interprets the request; the tool performs deterministic preparation and
+delegates the search to the database.
 
 ---
 
 ## One repository method combines the search
 
 
-[Combined hotel search](src/main/java/com/example/tools/TravelTools.java#L171)
+[Combined hotel search](src/main/java/com/example/repository/HotelRepository.java#L35)
 
 ---
 
-## Oracle performs the combined search
+## Database performs the combined search
 
 Conceptually, the generated operation is:
 
@@ -179,12 +158,12 @@ ORDER BY VECTOR_DISTANCE(content_embedding, ?, COSINE)
 FETCH NEXT 5 ROWS ONLY
 ```
 
-Oracle applies the geographic radius and price ceiling before returning the
-five best semantic matches. The SQL is abbreviated; Micronaut Data's generated
-implementation supplies the complete dialect-specific statement and parameter
-mapping.
+Oracle applies the vector-distance threshold, geographic radius, and price
+ceiling, then returns the five best matches ordered by semantic distance. The
+SQL is abbreviated; Micronaut Data's generated implementation supplies the
+complete dialect-specific statement and parameter mapping.
 
-[Combined hotel search](src/main/java/com/example/tools/TravelTools.java#L171)
+[Combined hotel search](src/main/java/com/example/repository/HotelRepository.java#L35)
 
 ---
 
@@ -240,11 +219,9 @@ AGENT: Swiss Travel Advisor
 
 ## Takeaways
 
-— Use embeddings to capture meaning, and keep factual data queryable.
-— Combine semantic relevance with harrd business constraints.
-- Give the model controlled access through explicit AI-service interfaces and well-defined tool parameters.
-- Use compile-time dependency injection and data access to reduce runtime overhead.
-- Give conversation memory and user state explicit, durable boundaries.
+- Use embeddings to capture meaning, and keep factual data queryable.
+- Combine semantic relevance with hard business constraints for valid and useful results.
+- Give the model controlled access through well-defined tool parameters.
 - Trace and evaluate model behavior so you can measure and improve it.
 - Use GraalVM Native Image for fast startup, reduced memory footprint, and compact deployment.
 

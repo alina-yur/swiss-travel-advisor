@@ -35,14 +35,20 @@ public final class LlmTracingListener implements ChatModelListener {
     private final Tracer tracer;
     private final boolean includeContent;
     private final AiObservability observability;
+    private final String providerName;
+    private final String serverAddress;
 
     public LlmTracingListener(
             OpenTelemetry openTelemetry,
             AiObservability observability,
-            @Value("${app.ai.tracing.include-content:false}") boolean includeContent) {
+            @Value("${app.ai.tracing.include-content:false}") boolean includeContent,
+            @Value("${app.ai.tracing.provider-name:openai}") String providerName,
+            @Value("${app.ai.tracing.server-address:api.openai.com}") String serverAddress) {
         this.tracer = openTelemetry.getTracer("com.example.swiss-travel-advisor.llm");
         this.observability = observability;
         this.includeContent = includeContent;
+        this.providerName = providerName;
+        this.serverAddress = serverAddress;
     }
 
     @Override
@@ -53,9 +59,9 @@ public final class LlmTracingListener implements ChatModelListener {
                 .setSpanKind(SpanKind.CLIENT)
                 .setAttribute("openinference.span.kind", "LLM")
                 .setAttribute("gen_ai.operation.name", "chat")
-                .setAttribute("gen_ai.provider.name", "openai")
+                .setAttribute("gen_ai.provider.name", providerName)
                 .setAttribute("gen_ai.request.model", model)
-                .setAttribute("server.address", "api.openai.com")
+                .setAttribute("server.address", serverAddress)
                 .startSpan();
 
         String sessionId = observability.currentSessionId();

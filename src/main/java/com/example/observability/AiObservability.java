@@ -41,7 +41,7 @@ public final class AiObservability {
             PhoenixAnnotationPublisher annotationPublisher,
             @Value("${app.ai.tracing.enabled:false}") boolean enabled,
             @Value("${app.ai.tracing.include-content:false}") boolean includeContent,
-            @Value("${langchain4j.open-ai.embedding-model.model-name:text-embedding-3-small}") String embeddingModelName) {
+            @Value("${app.ai.tracing.embedding-model-name:text-embedding-3-small}") String embeddingModelName) {
         this.tracer = openTelemetry.getTracer("com.example.swiss-travel-advisor.ai");
         this.objectMapper = objectMapper;
         this.annotationPublisher = annotationPublisher;

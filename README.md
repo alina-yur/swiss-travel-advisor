@@ -289,3 +289,38 @@ For development, the application can also be run on the JVM with:
 ```bash
 ./mvnw mn:run
 ```
+
+## Running with Mistral
+
+The default environment still uses OpenAI for chat and embeddings. Both Mistral
+chat environments keep OpenAI's `text-embedding-3-small` embeddings, so set
+`OPENAI_API_KEY` and use the existing Oracle schema and vectors.
+
+For Mistral's hosted API, set the key in your shell and start the `mistral`
+environment:
+
+```bash
+export MISTRAL_API_KEY=...
+MICRONAUT_ENVIRONMENTS=mistral ./mvnw mn:run
+```
+
+The default hosted model is `mistral-small-2603`. Override it with
+`MISTRAL_CHAT_MODEL` if needed.
+
+For local open weights, install and start Ollama, then run:
+
+```bash
+ollama pull ministral-3:8b
+MICRONAUT_ENVIRONMENTS=mistral-local ./mvnw mn:run
+```
+
+The local model and endpoint can be changed with `OLLAMA_CHAT_MODEL` and
+`OLLAMA_BASE_URL`. The same app can use Mistral's hosted API or an open-weight
+Ministral model on your own hardware through configuration. Ministral 3 is
+Apache 2.0 licensed. See [Mistral's pricing page](https://docs.mistral.ai/inference/pricing)
+for current hosted API prices. Small local models may choose tools less reliably
+than the hosted model.
+
+Mistral embeddings would require a separate Oracle schema with 1024-dimensional
+vector columns and a full embedding backfill. The environments above keep the
+existing 1536-dimensional schema.
